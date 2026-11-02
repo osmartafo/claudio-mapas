@@ -1,0 +1,8 @@
+skia-python==144.1
+numpy>=2.0
+scipy>=1.13
+pillow>=11.0
+shapely>=2.0
+anthropic>=0.70
+requests>=2.32
+python-telegram-bot==21.11.1

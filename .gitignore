@@ -1,0 +1,12 @@
+.env
+videos/
+__pycache__/
+*.tmp.mp4
+assets/datos/shadedrelief.jpg
+assets/datos/ne_10m_admin_1_states_provinces.geojson
+assets/datos/ne_50m_admin_1_states_provinces.geojson
+assets/datos/ne_50m_lakes.geojson
+assets/datos/ne_50m_rivers_lake_centerlines.geojson
+ejemplos/*/f_*.jpg
+ejemplos/*/hoja.jpg
+ejemplos/*/musica.wav

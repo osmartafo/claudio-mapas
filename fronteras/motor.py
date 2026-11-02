@@ -1,0 +1,586 @@
+"""Motor de video de FRONTERAS.
+
+Convierte una especificación (guion + escenas en JSON) y los tiempos de la voz en un video
+de documental con mapas en relieve. Todo se dibuja como función del tiempo.
+
+Especificación (lo que escribe el guionista, humano o IA):
+{
+  "titulo": "...",
+  "formato": "vertical" | "horizontal",
+  "territorios": {"cesion": [[lon,lat], ...]},          # polígonos propios opcionales
+  "escenas": [
+    {
+      "desde": "frase que dice la voz",                   # la escena empieza cuando la voz la dice
+      "camara": [lon, lat, ancho_en_grados],
+      "año": "1848",                                      # opcional
+      "titulo": "Texto grande",                           # opcional
+      "cifra": "15 millones de dólares",                  # opcional
+      "zonas": [{"zona": "pais:MEX" | "estado:Texas" | "territorio:cesion",
+                 "estilo": "oro" | "rojo" | "crema" | "contorno" | "foco",
+                 "desde": "frase", "mantener": false}],
+      "etiquetas": [{"texto": "California", "lugar": [lon, lat], "desde": "frase"}],
+      "pines": [{"texto": "Ciudad de México", "lugar": [lon, lat], "desde": "frase"}],
+      "flechas": [{"puntos": [[lon,lat], [lon,lat], ...], "desde": "frase"}]
+    }
+  ]
+}
+"""
+import json, math, os, subprocess, unicodedata, gzip
+import numpy as np
+import skia
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATOS = f"{RAIZ}/assets/datos"
+FUENTES = f"{RAIZ}/assets/fuentes"
+FPS = 30
+
+# ---------------- identidad FRONTERAS ----------------
+NOCHE = "#07090C"
+MARFIL = "#EDE6D6"
+ORO = "#C9A45C"
+ORO_CLARO = "#E8CC8A"
+CARMIN = "#A3362B"
+PIEDRA = "#8A8170"
+
+
+def col(h, a=1.0):
+    h = h.lstrip("#")
+    return skia.Color4f(int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
+
+
+def clamp(x, a=0.0, b=1.0):
+    return max(a, min(b, x))
+
+
+def suave(x):
+    x = clamp(x)
+    return x * x * (3 - 2 * x)
+
+
+def cubica(x):
+    x = clamp(x)
+    return 4 * x ** 3 if x < 0.5 else 1 - (-2 * x + 2) ** 3 / 2
+
+
+def sale(x):  # ease out expo
+    x = clamp(x)
+    return 1 if x == 1 else 1 - 2 ** (-10 * x)
+
+
+def rampa(t, t0, d=0.6):
+    return suave((t - t0) / d)
+
+
+def ventana(t, t0, t1, f=0.5):
+    return min(rampa(t, t0, f), 1 - rampa(t, t1 - f, f))
+
+
+# ---------------- voz ----------------
+def _n(s):
+    s = unicodedata.normalize("NFD", s.lower())
+    return "".join(c for c in s if c.isalnum())
+
+
+class Voz:
+    def __init__(self, palabras, duracion):
+        self.palabras, self.duracion = palabras, duracion
+        self._lista = [_n(w["p"]) for w in palabras]
+
+    @classmethod
+    def de_archivo(cls, ruta):
+        d = json.load(open(ruta))
+        return cls(d["palabras"], d["duracion"])
+
+    def en(self, frase, desde_t=0.0):
+        """Segundo en que la voz empieza a decir la frase (la primera vez después de desde_t)."""
+        obj = [x for x in (_n(p) for p in frase.split()) if x]
+        for i in range(len(self._lista) - len(obj) + 1):
+            if self.palabras[i]["t0"] >= desde_t - 0.01 and self._lista[i:i + len(obj)] == obj:
+                return self.palabras[i]["t0"]
+        # tolerancia: si la frase exacta no está, buscar solo su primera palabra
+        for i, w in enumerate(self._lista):
+            if self.palabras[i]["t0"] >= desde_t - 0.01 and obj and w == obj[0]:
+                return self.palabras[i]["t0"]
+        raise ValueError(f"La voz no dice «{frase}»")
+
+
+# ---------------- geografía ----------------
+def _path(geo, K):
+    p = skia.Path()
+    polys = geo["coordinates"] if geo["type"] == "MultiPolygon" else [geo["coordinates"]]
+    for poly in polys:
+        for anillo in poly:
+            for i, (lon, lat) in enumerate(anillo):
+                (p.moveTo if i == 0 else p.lineTo)(lon * K, -lat)
+            p.close()
+    return p
+
+
+class Geo:
+    """Países y estados del mundo (Natural Earth) como trayectos listos para dibujar."""
+
+    def __init__(self, K):
+        self.K = K
+        cache = f"{DATOS}/geo.json.gz"
+        if os.path.exists(cache):
+            self.geo = json.load(gzip.open(cache, "rt", encoding="utf-8"))
+        else:
+            from shapely.geometry import shape, mapping
+            g = {}
+            for f in json.load(open(f"{DATOS}/ne_50m_admin_0_countries.geojson"))["features"]:
+                pr = f["properties"]
+                g[f"pais:{pr['ADM0_A3']}"] = f["geometry"]
+                g.setdefault(f"pais:{_n(pr['NAME'])}", f["geometry"])
+                g.setdefault(f"pais:{_n(pr.get('NAME_ES') or '')}", f["geometry"])
+            for f in json.load(open(f"{DATOS}/ne_10m_admin_1_states_provinces.geojson"))["features"]:
+                pr = f["properties"]
+                geom = mapping(shape(f["geometry"]).simplify(0.01, preserve_topology=True))
+                for nombre in {pr.get("name"), pr.get("name_es"), pr.get("name_en")}:
+                    if nombre:
+                        g.setdefault(f"estado:{_n(nombre)}", geom)
+                        g[f"estado:{pr['adm0_a3']}:{_n(nombre)}"] = geom
+            self.geo = g
+            json.dump(g, gzip.open(cache, "wt", encoding="utf-8"))
+        self.paises = [(k, _path(v, K)) for k, v in self.geo.items() if k.startswith("pais:") and len(k) == 8]
+        self._cache = {}
+
+    def zona(self, clave, territorios):
+        if clave in self._cache:
+            return self._cache[clave]
+        tipo, _, nombre = clave.partition(":")
+        if tipo == "territorio":
+            pts = territorios[nombre]
+            if isinstance(pts, dict):
+                self._cache[clave] = _path(pts, self.K)
+                return self._cache[clave]
+            p = skia.Path()
+            for i, (lon, lat) in enumerate(pts):
+                (p.moveTo if i == 0 else p.lineTo)(lon * self.K, -lat)
+            p.close()
+        else:
+            nombre_n = nombre if (tipo == "pais" and len(nombre) == 3 and nombre.isupper()) else _n(nombre)
+            geo = self.geo.get(f"{tipo}:{nombre_n}") or self.geo.get(f"{tipo}:{nombre}")
+            if geo is None:
+                raise ValueError(f"No encuentro la zona «{clave}»")
+            p = _path(geo, self.K)
+        self._cache[clave] = p
+        return p
+
+
+# ---------------- fuentes ----------------
+_tf = {}
+
+
+def fuente(nombre, tam):
+    if nombre not in _tf:
+        _tf[nombre] = skia.Typeface.MakeFromFile(f"{FUENTES}/{nombre}.ttf")
+    f = skia.Font(_tf[nombre], tam)
+    f.setEdging(skia.Font.Edging.kAntiAlias)
+    f.setSubpixel(True)
+    return f
+
+
+def escribe(c, s, x, y, f, color, alfa=1.0, espacio=0.0, centro=True, sombra=0.6):
+    """Texto con espaciado entre letras y sombra suave."""
+    if alfa <= 0.003 or not s:
+        return
+    anchos = f.getWidths(f.textToGlyphs(s))
+    total = sum(anchos) + espacio * (len(s) - 1)
+    x0 = x - total / 2 if centro else x
+    blob_b = skia.TextBlobBuilder()
+    pos = []
+    cx = x0
+    for a in anchos:
+        pos.append(skia.Point(cx, y))
+        cx += a + espacio
+    blob_b.allocRunPos(f, f.textToGlyphs(s), pos)
+    blob = blob_b.make()
+    if sombra:
+        ps = skia.Paint(AntiAlias=True, Color4f=col("#000000", sombra * alfa))
+        ps.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, f.getSize() * 0.12))
+        c.drawTextBlob(blob, 0, f.getSize() * 0.04, ps)
+    c.drawTextBlob(blob, 0, 0, skia.Paint(AntiAlias=True, Color4f=col(color, alfa) if isinstance(color, str) else color))
+    return total
+
+
+def mide(f, s, espacio=0.0):
+    return sum(f.getWidths(f.textToGlyphs(s))) + espacio * (len(s) - 1)
+
+
+def parte_lineas(f, s, maximo, espacio=0.0):
+    pals, lineas, act = s.split(), [], ""
+    for p in pals:
+        prueba = (act + " " + p).strip()
+        if mide(f, prueba, espacio) <= maximo or not act:
+            act = prueba
+        else:
+            lineas.append(act)
+            act = p
+    if act:
+        lineas.append(act)
+    return lineas
+
+
+# ---------------- el motor ----------------
+class Short:
+    def __init__(self, spec, voz):
+        self.spec, self.voz = spec, voz
+        vertical = spec.get("formato", "vertical") == "vertical"
+        self.W, self.H = (1080, 1920) if vertical else (1920, 1080)
+        self.vertical = vertical
+        self.K = math.cos(math.radians(spec.get("latitud_media", 30)))
+        self.geo = Geo(self.K)
+        self.base = skia.Image.open(f"{DATOS}/base_fronteras.jpg")
+        self.terr = spec.get("territorios", {})
+        self.duracion = voz.duracion + 3.2
+        self._resolver()
+        self._grano = self._hacer_grano()
+
+    # tiempos de cada escena y elemento, sacados de la voz
+    def _resolver(self):
+        t_prev = 0.0
+        self.escenas = []
+        for i, e in enumerate(self.spec["escenas"]):
+            t0 = 0.0 if i == 0 else self.voz.en(e["desde"], t_prev)
+            t_prev = t0
+            self.escenas.append(dict(e, _t0=t0))
+        for i, e in enumerate(self.escenas):
+            e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else self.voz.duracion + 0.6
+            for grupo in ("zonas", "etiquetas", "pines", "flechas"):
+                for el in e.get(grupo, []):
+                    el["_t"] = self.voz.en(el["desde"], e["_t0"]) if el.get("desde") else e["_t0"] + 0.15
+        # zonas que no existen se descartan con aviso, en vez de tumbar el video
+        for e in self.escenas:
+            buenas = []
+            for z in e.get("zonas", []):
+                try:
+                    self.geo.zona(z["zona"], self.terr)
+                    buenas.append(z)
+                except (ValueError, KeyError) as err:
+                    print("Aviso:", err)
+            e["zonas"] = buenas
+        # una zona con "mantener" sigue visible hasta el final
+        self.T_FIN = self.voz.duracion + 0.4
+
+    # ---- cámara: corte suave entre escenas y empuje lento dentro de cada una
+    def camara(self, t):
+        e_act = self.escenas[0]
+        for e in self.escenas:
+            if t >= e["_t0"]:
+                e_act = e
+        i = self.escenas.index(e_act)
+        lon, lat, ancho = e_act["camara"]
+        dur = max(0.1, e_act["_t1"] - e_act["_t0"])
+        u = clamp((t - e_act["_t0"]) / dur)
+        ancho *= 1 - 0.07 * u  # empuje lento
+        if i > 0:
+            pl, pa, pw = self.escenas[i - 1]["camara"]
+            pw *= 0.93
+            k = cubica((t - e_act["_t0"]) / 1.3)
+            lon = pl + (lon - pl) * k
+            lat = pa + (lat - pa) * k
+            ancho = math.exp(math.log(pw) + (math.log(ancho) - math.log(pw)) * k)
+        else:  # apertura: baja desde muy lejos
+            k = sale(t / 2.6)
+            ancho = math.exp(math.log(ancho * 4.5) + (math.log(ancho) - math.log(ancho * 4.5)) * k)
+        lon += 0.12 * math.sin(t * 0.31)
+        lat += 0.08 * math.cos(t * 0.27)
+        return lon, lat, ancho
+
+    def matriz(self, t):
+        lon, lat, ancho = self.camara(t)
+        s = self.W / (ancho * self.K)
+        m = skia.Matrix()
+        m.setTranslate(self.W / 2, self.H * (0.52 if self.vertical else 0.5))
+        m.preScale(s, s)
+        m.preTranslate(-lon * self.K, lat)
+        return m, s
+
+    def px(self, m, lon, lat):
+        p = m.mapXY(lon * self.K, -lat)
+        return p.x(), p.y()
+
+    # ---- capas
+    def _fondo(self, c, m):
+        c.clear(col(NOCHE))
+        c.save()
+        c.concat(m)
+        c.translate(-180 * self.K, -90)
+        c.scale(self.K * 360 / self.base.width(), 180 / self.base.height())
+        c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear))
+        c.restore()
+        # fronteras de países, finas y discretas
+        c.save()
+        c.concat(m)
+        s = m.getScaleX()
+        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.16), Style=skia.Paint.kStroke_Style, StrokeWidth=1.6 / s)
+        for _, path in self.geo.paises:
+            c.drawPath(path, p)
+        c.restore()
+
+    def _zona(self, c, m, path, estilo, a):
+        if a <= 0.003:
+            return
+        s = m.getScaleX()
+        c.save()
+        if estilo == "foco":
+            c.restore()
+            inv = skia.Path(path)
+            inv.transform(m)
+            inv.setFillType(skia.PathFillType.kInverseWinding)
+            c.drawPath(inv, skia.Paint(AntiAlias=True, Color4f=col("#000000", 0.55 * a)))
+            return
+        c.concat(m)
+        tonos = {"oro": (ORO, 0.30), "rojo": (CARMIN, 0.42), "crema": (MARFIL, 0.20), "contorno": (ORO, 0.0)}
+        tono, relleno = tonos.get(estilo, (ORO, 0.3))
+        if relleno:
+            c.drawPath(path, skia.Paint(AntiAlias=True, Color4f=col(tono, relleno * a)))
+        brillo = skia.Paint(AntiAlias=True, Color4f=col(tono, 0.55 * a), Style=skia.Paint.kStroke_Style, StrokeWidth=14 / s,
+                            StrokeJoin=skia.Paint.kRound_Join)
+        brillo.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 10 / s))
+        c.drawPath(path, brillo)
+        borde = ORO_CLARO if tono == ORO else (MARFIL if tono == MARFIL else "#D9644F")
+        c.drawPath(path, skia.Paint(AntiAlias=True, Color4f=col(borde, 0.95 * a), Style=skia.Paint.kStroke_Style,
+                                    StrokeWidth=3.2 / s, StrokeJoin=skia.Paint.kRound_Join))
+        c.restore()
+
+    def _etiqueta(self, c, x, y, texto, a, tam=None):
+        if a <= 0.003:
+            return
+        tam = tam or (34 if self.vertical else 30)
+        f = fuente("Sans-SemiBold", tam)
+        s = texto.upper()
+        esp = tam * 0.16
+        w = mide(f, s, esp)
+        dy = (1 - sale(a)) * 14
+        margen = 44
+        x_txt = clamp(x, margen + w / 2, self.W - margen - w / 2)
+        # pequeño rombo dorado y texto marfil con espaciado amplio
+        c.save()
+        c.translate(x, y + dy)
+        rombo = skia.Path()
+        r = tam * 0.17
+        rombo.moveTo(0, -r); rombo.lineTo(r, 0); rombo.lineTo(0, r); rombo.lineTo(-r, 0); rombo.close()
+        c.drawPath(rombo, skia.Paint(AntiAlias=True, Color4f=col(ORO, a)))
+        escribe(c, s, x_txt - x, -tam * 0.75, f, MARFIL, alfa=a, espacio=esp, sombra=0.9)
+        c.restore()
+
+    def _pin(self, c, x, y, texto, a, t, t0):
+        if a <= 0.003:
+            return
+        pulso = ((t - t0) % 2.0) / 2.0
+        c.drawCircle(x, y, 10 + 46 * pulso, skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.5 * (1 - pulso) * a),
+                                                          Style=skia.Paint.kStroke_Style, StrokeWidth=2.5))
+        c.drawCircle(x, y, 9, skia.Paint(AntiAlias=True, Color4f=col(ORO_CLARO, a)))
+        c.drawCircle(x, y, 15, skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.9 * a), Style=skia.Paint.kStroke_Style, StrokeWidth=2))
+        self._etiqueta(c, x, y - 34, texto, a)
+
+    def _flecha(self, c, pts, avance, a):
+        if avance <= 0 or a <= 0:
+            return
+        p = skia.Path()
+        p.moveTo(*pts[0])
+        if len(pts) == 2:
+            (x0, y0), (x1, y1) = pts
+            mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+            nx, ny = -(y1 - y0) * 0.18, (x1 - x0) * 0.18
+            p.quadTo(mx + nx, my + ny, x1, y1)
+        else:
+            for i in range(1, len(pts) - 1):
+                mx, my = (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2
+                p.quadTo(*pts[i], mx, my)
+            p.lineTo(*pts[-1])
+        med = skia.PathMeasure(p, False)
+        L = med.getLength()
+        seg = skia.Path()
+        med.getSegment(0, L * avance, seg, True)
+        g = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.45 * a), Style=skia.Paint.kStroke_Style, StrokeWidth=22,
+                       StrokeCap=skia.Paint.kRound_Cap)
+        g.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 9))
+        c.drawPath(seg, g)
+        c.drawPath(seg, skia.Paint(AntiAlias=True, Color4f=col(ORO_CLARO, a), Style=skia.Paint.kStroke_Style, StrokeWidth=7,
+                                   StrokeCap=skia.Paint.kRound_Cap))
+        pos, tan = med.getPosTan(L * avance)
+        ang = math.atan2(tan.y(), tan.x())
+        cab = skia.Path()
+        R = 30
+        cab.moveTo(pos.x() + math.cos(ang) * R * 0.7, pos.y() + math.sin(ang) * R * 0.7)
+        cab.lineTo(pos.x() + math.cos(ang + 2.55) * R, pos.y() + math.sin(ang + 2.55) * R)
+        cab.lineTo(pos.x() + math.cos(ang - 2.55) * R, pos.y() + math.sin(ang - 2.55) * R)
+        cab.close()
+        c.drawPath(cab, skia.Paint(AntiAlias=True, Color4f=col(ORO_CLARO, a)))
+
+    def _titulos(self, c, t, e):
+        a = ventana(t, e["_t0"] + 0.1, e["_t1"] + 0.05, 0.45)
+        if a <= 0.003:
+            return
+        W = self.W
+        y_base = 300 if self.vertical else 150
+        sube = (1 - sale((t - e["_t0"] - 0.1) / 0.9)) * 26
+        if e.get("año"):
+            f = fuente("Sans-SemiBold", 34 if self.vertical else 28)
+            s = str(e["año"])
+            esp = 12
+            w = mide(f, s, esp)
+            y = y_base - 92 + sube
+            escribe(c, s, W / 2, y, f, ORO, alfa=a, espacio=esp)
+            lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.7 * a), StrokeWidth=2)
+            largo = 70 * sale((t - e["_t0"]) / 0.8)
+            c.drawLine(W / 2 - w / 2 - 24 - largo, y - 11, W / 2 - w / 2 - 24, y - 11, lp)
+            c.drawLine(W / 2 + w / 2 + 24, y - 11, W / 2 + w / 2 + 24 + largo, y - 11, lp)
+        if e.get("titulo"):
+            tam = 96 if self.vertical else 84
+            f = fuente("Serif-SemiBold", tam)
+            lineas = parte_lineas(f, e["titulo"], W - 150)
+            while len(lineas) > 2 and tam > 60:
+                tam -= 8
+                f = fuente("Serif-SemiBold", tam)
+                lineas = parte_lineas(f, e["titulo"], W - 150)
+            for k, ln in enumerate(lineas):
+                escribe(c, ln, W / 2, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85)
+        if e.get("cifra"):
+            ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
+            f = fuente("Serif-Medium", 82 if self.vertical else 70)
+            y = (1290 if self.vertical else 860) + (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
+            escribe(c, e["cifra"], W / 2, y, f, ORO_CLARO, alfa=ac, sombra=0.9)
+
+    def _subtitulos(self, c, t):
+        pal = self.voz.palabras
+        grupos, act = [], []
+        for w in pal:
+            act.append(w)
+            if len(act) >= 4 or len(" ".join(x["p"] for x in act)) > 22 or w["p"][-1] in ",.:?!;":
+                grupos.append(act)
+                act = []
+        if act:
+            grupos.append(act)
+        for i, g in enumerate(grupos):
+            fin = grupos[i + 1][0]["t0"] if i + 1 < len(grupos) else g[-1]["t1"] + 0.6
+            if g[0]["t0"] - 0.05 <= t < fin:
+                tam = 52 if self.vertical else 44
+                f = fuente("Sans-SemiBold", tam)
+                ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
+                esp = tam * 0.28
+                anchos = [mide(f, p) for p in ps]
+                total = sum(anchos) + esp * (len(ps) - 1)
+                x = self.W / 2 - total / 2
+                y = 1600 if self.vertical else 985
+                a = rampa(t, g[0]["t0"] - 0.05, 0.12)
+                for w, p, an in zip(g, ps, anchos):
+                    dicha = t >= w["t0"] - 0.03
+                    ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
+                    escribe(c, p, x, y, f, ORO_CLARO if ahora else MARFIL, alfa=a * (1 if dicha else 0.5), centro=False, sombra=0.95)
+                    x += an + esp
+                return
+
+    def _hacer_grano(self):
+        rng = np.random.default_rng(7)
+        imgs = []
+        for _ in range(4):
+            n = (rng.normal(0.5, 0.18, (self.H // 2, self.W // 2)) * 255).clip(0, 255).astype(np.uint8)
+            rgba = np.dstack([n, n, n, np.full_like(n, 255)])
+            imgs.append(skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType))
+        return imgs
+
+    def _acabado(self, c, t):
+        W, H = self.W, self.H
+        vin = skia.Paint(Shader=skia.GradientShader.MakeRadial((W / 2, H / 2), max(W, H) * 0.72,
+                         [col("#000000", 0).toColor(), col("#000000", 0.7).toColor()], [0.45, 1.0]))
+        c.drawRect(skia.Rect(0, 0, W, H), vin)
+        # degradado arriba y abajo para que respiren los textos
+        for y0, y1, a0, a1 in ((0, H * 0.28, 0.75, 0), (H * 0.70, H, 0, 0.8)):
+            g = skia.Paint(Shader=skia.GradientShader.MakeLinear([(0, y0), (0, y1)], [col("#000000", a0).toColor(), col("#000000", a1).toColor()]))
+            c.drawRect(skia.Rect(0, y0, W, y1), g)
+        gp = skia.Paint(Alphaf=0.07, BlendMode=skia.BlendMode.kOverlay)
+        c.drawImageRect(self._grano[int(t * FPS) % 4], skia.Rect(0, 0, W, H), skia.SamplingOptions(), gp)
+
+    def _marca(self, c, t):
+        f = fuente("Serif-SemiBold", 30 if self.vertical else 26)
+        y = self.H - 70 if self.vertical else self.H - 44
+        a = 0.6 * (1 - rampa(t, self.T_FIN, 0.4))
+        escribe(c, "FRONTERAS", self.W / 2, y, f, MARFIL, alfa=a, espacio=9, sombra=0.5)
+
+    def _cierre(self, c, t):
+        a = rampa(t, self.T_FIN, 0.9)
+        if a <= 0:
+            return
+        W, H = self.W, self.H
+        c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col(NOCHE, 0.9 * a)))
+        cy = H / 2
+        f = fuente("Serif-SemiBold", 132 if self.vertical else 120)
+        escribe(c, "FRONTERAS", W / 2, cy, f, MARFIL, alfa=a, espacio=22 * (0.6 + 0.4 * sale((t - self.T_FIN) / 1.6)))
+        lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, a), StrokeWidth=2)
+        L = 180 * sale((t - self.T_FIN - 0.3) / 1.0)
+        c.drawLine(W / 2 - L, cy + 52, W / 2 + L, cy + 52, lp)
+        f2 = fuente("Serif-Medium", 46 if self.vertical else 40)
+        escribe(c, "La historia que dibujó el mapa", W / 2, cy + 128, f2, ORO_CLARO, alfa=rampa(t, self.T_FIN + 0.5, 0.8))
+
+    # ---- un fotograma
+    def dibujar(self, c, t):
+        m, s = self.matriz(t)
+        self._fondo(c, m)
+        # zonas (las de escenas pasadas con "mantener" siguen)
+        for e in self.escenas:
+            for z in e.get("zonas", []):
+                fin = self.T_FIN + 2 if z.get("mantener") else e["_t1"] + 0.3
+                a = ventana(t, z["_t"], fin, 0.6)
+                if a > 0:
+                    self._zona(c, m, self.geo.zona(z["zona"], self.terr), z.get("estilo", "oro"), a)
+        for e in self.escenas:
+            for f_ in e.get("flechas", []):
+                a = ventana(t, f_["_t"], e["_t1"] + 0.3, 0.4)
+                if a > 0:
+                    self._flecha(c, [self.px(m, *p) for p in f_["puntos"]], cubica((t - f_["_t"]) / 1.4), a)
+            for p_ in e.get("pines", []):
+                a = ventana(t, p_["_t"], e["_t1"] + 0.3, 0.4)
+                if a > 0:
+                    self._pin(c, *self.px(m, *p_["lugar"]), p_["texto"], a, t, p_["_t"])
+            for l_ in e.get("etiquetas", []):
+                a = ventana(t, l_["_t"], e["_t1"] + 0.3, 0.4)
+                if a > 0:
+                    self._etiqueta(c, *self.px(m, *l_["lugar"]), l_["texto"], a)
+        self._acabado(c, t)
+        for e in self.escenas:
+            if e["_t0"] - 0.1 <= t < e["_t1"] + 0.6:
+                self._titulos(c, t, e)
+        if t < self.T_FIN:
+            self._subtitulos(c, t)
+        self._marca(c, t)
+        self._cierre(c, t)
+
+    # ---- salida
+    def foto(self, t, ruta):
+        sup = skia.Surface(self.W, self.H)
+        with sup as c:
+            self.dibujar(c, t)
+        sup.makeImageSnapshot().save(ruta, skia.kJPEG)
+
+    def render(self, salida, voz_mp3=None, musica_wav=None):
+        tmp = salida[:-4] + ".tmp.mp4"
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{self.W}x{self.H}",
+               "-r", str(FPS), "-i", "-"]
+        mezcla = []
+        if voz_mp3:
+            cmd += ["-i", voz_mp3]
+        if musica_wav:
+            cmd += ["-i", musica_wav]
+        if voz_mp3 and musica_wav:
+            cmd += ["-filter_complex", "[1:a]volume=1.0[v];[2:a]volume=0.22[m];[m][v]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[md];[v][md]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[a]",
+                    "-map", "0:v", "-map", "[a]"]
+        elif voz_mp3 or musica_wav:
+            cmd += ["-map", "0:v", "-map", "1:a"]
+        if voz_mp3 or musica_wav:
+            cmd += ["-c:a", "aac", "-b:a", "192k"]
+        cmd += ["-t", f"{self.duracion:.2f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart", tmp]
+        pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        sup = skia.Surface(self.W, self.H)
+        for n in range(int(self.duracion * FPS)):
+            with sup as c:
+                self.dibujar(c, n / FPS)
+            pr.stdin.write(sup.makeImageSnapshot().toarray(colorType=skia.kRGBA_8888_ColorType).tobytes())
+        pr.stdin.close()
+        if pr.wait() != 0:
+            raise RuntimeError("ffmpeg falló al renderizar")
+        os.replace(tmp, salida)
+        return salida

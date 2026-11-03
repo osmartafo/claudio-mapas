@@ -3,7 +3,7 @@ import json, os, re
 from json_repair import repair_json
 import anthropic
 
-MODELO = os.environ.get("FRONTERAS_MODELO", "claude-sonnet-5-5")
+MODELO = os.environ.get("FRONTERAS_MODELO", "claude-haiku-5-5")
 
 SISTEMA = """Eres el guionista y director de FRONTERAS, un canal de YouTube de documentales cortos de historia y geografía.
 Personalidad del canal: documental premium, elegante y sobrio, como una serie de Netflix. Voz grave, ritmo ágil de short.
@@ -65,7 +65,7 @@ REGLAS DE LAS ESCENAS
 - Los "desde" van de 2 a 3 palabras para que los cortes caigan exactos.
 - Zonas válidas: "pais:XXX" con el código ISO de 3 letras (MEX, USA, ESP, GBR, RUS, CHN...),
   "estado:ISO:nombre" para estados o provincias (estado:USA:texas, estado:MEX:chiapas, estado:ESP:andalucia),
-  o "territorio:nombre_corto" para un polígono que tú defines en "territorios" (límites históricos aproximados, de 6 a 30 puntos).
+  o "territorio:nombre_corto" para un polígono que tú defines en "territorios" (límites históricos aproximados, de 6 a 14 puntos).
 - Estilos: "oro" (protagonista), "rojo" (pérdida, conflicto), "crema" (contexto), "contorno" (solo borde), "foco" (oscurece todo lo demás).
 - "camara": el video es vertical, así que el ancho visible va de 3 grados (una ciudad) a 60 grados (un continente).
   Encuadra para que lo importante quede en el centro. Entre escenas de mapa seguidas cambia mucho el ancho
@@ -78,6 +78,7 @@ REGLAS DE LAS ESCENAS
   un viaje por mar: barco; un rey o imperio: corona; independencia: bandera; población: multitud; el paso del tiempo: reloj).
   Nunca dos broll seguidos: entre uno y otro siempre va al menos una escena de mapa. La primera y la última escena son de mapa.
   Una escena de broll puede no llevar "camara" (se queda la del mapa anterior) y casi siempre lleva "titulo" o "cifra".
+- JSON compacto: coordenadas con máximo 2 decimales, sin campos vacíos ni listas vacías, sin explicaciones.
 - Coordenadas reales y precisas (lon negativa al oeste, lat negativa al sur).
 """
 
@@ -85,17 +86,22 @@ REGLAS DE LAS ESCENAS
 def escribir(tema, api_key=None):
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
     mensajes = [{"role": "user", "content": f"Tema del video: {tema}"}]
-    r = cliente.messages.create(
+    # se pide en streaming: con un tope alto de salida la API lo exige y nunca se queda corto el guion
+    with cliente.messages.stream(
         model=MODELO,
-        max_tokens=16000,
+        max_tokens=int(os.environ.get("FRONTERAS_TOKENS", "32000")),
         system=[{"type": "text", "text": SISTEMA, "cache_control": {"type": "ephemeral"}}],
         messages=mensajes,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}],
-    )
+    ) as flujo:
+        r = flujo.get_final_message()
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
-    m = re.search(r"\{.*\}", texto, re.S)
-    if not m:
+    i = texto.find("{")
+    if i < 0:
         raise ValueError(f"El guionista no devolvió el guion (motivo {r.stop_reason}). Intenta de nuevo.")
-    spec = json.loads(repair_json(m.group(0)))
+    spec = json.loads(repair_json(texto[i:texto.rfind("}") + 1] if r.stop_reason != "max_tokens" else texto[i:]))
+    # si se cortó, se rescata lo que alcanzó a escribir con tal de que tenga guion y suficientes escenas
+    if not isinstance(spec, dict) or not spec.get("guion") or len(spec.get("escenas") or []) < 6:
+        raise ValueError(f"El guionista no terminó el guion (motivo {r.stop_reason}). Intenta de nuevo.")
     spec.setdefault("formato", "vertical")
     return spec

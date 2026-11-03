@@ -16,6 +16,7 @@ from .fabrica import hacer_video
 from . import guionista
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
 PERMITIDOS = {int(x) for x in os.environ.get("TELEGRAM_USUARIOS", "").replace(" ", "").split(",") if x}
 cola = asyncio.Lock()
 estado = {"ahora": "libre"}

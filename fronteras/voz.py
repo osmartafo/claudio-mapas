@@ -11,18 +11,29 @@ MODELO = os.environ.get("FRONTERAS_MODELO_VOZ", "eleven_multilingual_v2")
 
 def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
     key = api_key or os.environ["ELEVENLABS_API_KEY"]
-    r = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{VOZ}/with-timestamps",
-        headers={"xi-api-key": key, "Content-Type": "application/json"},
-        params={"output_format": "mp3_44100_128"},
-        json={
-            "text": texto,
-            "model_id": MODELO,
-            "voice_settings": {"stability": 0.55, "similarity_boost": 0.8, "style": 0.15, "speed": 0.95},
-        },
-        timeout=300,
-    )
-    r.raise_for_status()
+    intentos = [
+        {"stability": 0.55, "similarity_boost": 0.8, "style": 0.15, "speed": 0.95},
+        {"stability": 0.55, "similarity_boost": 0.8},
+    ]
+    r = None
+    for ajustes in intentos:
+        r = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{VOZ}/with-timestamps",
+            headers={"xi-api-key": key, "Content-Type": "application/json"},
+            params={"output_format": "mp3_44100_128"},
+            json={"text": texto, "model_id": MODELO, "voice_settings": ajustes},
+            timeout=300,
+        )
+        if r.ok:
+            break
+    if not r.ok:
+        try:
+            detalle = r.json().get("detail", r.text)
+        except Exception:
+            detalle = r.text
+        if isinstance(detalle, dict):
+            detalle = detalle.get("message") or detalle.get("status") or str(detalle)
+        raise RuntimeError(f"ElevenLabs dijo {r.status_code}: {str(detalle)[:300]}")
     d = r.json()
     open(ruta_mp3, "wb").write(base64.b64decode(d["audio_base64"]))
     al = d.get("normalized_alignment") or d["alignment"]

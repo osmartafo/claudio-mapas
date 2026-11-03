@@ -220,7 +220,7 @@ async def voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- producción ----------------
-async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, horizontal=False):
+async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, horizontal=False, nuevo=False):
     msg = update.effective_message
     tema = (tema or "").strip()
     if not tema:
@@ -246,7 +246,7 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
             asyncio.run_coroutine_threadsafe(tarjeta.edit_text(nuevo, parse_mode=ParseMode.HTML), loop)
 
         try:
-            video, texto = await asyncio.to_thread(hacer_video, tema, horizontal, aviso)
+            video, texto = await asyncio.to_thread(hacer_video, tema, horizontal, aviso, nuevo)
             contador["video"] += 1
             n = contador["video"]
             hechos[n] = (video, texto, tema, horizontal)
@@ -336,7 +336,7 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         n = int(valor)
         if n in hechos:
             _, _, tema, horizontal = hechos[n]
-            asyncio.create_task(producir(update, ctx, tema, horizontal))
+            asyncio.create_task(producir(update, ctx, tema, horizontal, nuevo=True))
     elif accion in ("fb", "ig", "meta"):
         await q.answer("🚀 Publicando…")
         n = int(valor)

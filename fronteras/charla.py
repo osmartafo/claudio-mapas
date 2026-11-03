@@ -7,7 +7,7 @@ import requests
 from json_repair import repair_json
 import json
 
-from .guionista import MODELO
+MODELO = os.environ.get("FRONTERAS_MODELO_CHARLA", "claude-haiku-5-5")
 
 SISTEMA = """Eres el asistente de FRONTERAS, un canal de YouTube de documentales cortos de historia y geografía con mapas.
 Hablas con el dueño del canal por Telegram, en español de México, como un colega amable y directo.
@@ -38,7 +38,8 @@ def responder(chat_id, texto):
     h = historial[chat_id]
     h.append({"role": "user", "content": texto})
     c = anthropic.Anthropic()
-    r = c.messages.create(model=MODELO, max_tokens=3000, system=SISTEMA, messages=list(h))
+    r = c.messages.create(model=MODELO, max_tokens=1500, messages=list(h),
+                         system=[{"type": "text", "text": SISTEMA, "cache_control": {"type": "ephemeral"}}])
     salida = "".join(b.text for b in r.content if b.type == "text").strip()
     try:
         datos = json.loads(repair_json(salida))

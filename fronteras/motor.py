@@ -20,7 +20,8 @@ Especificación (lo que escribe el guionista, humano o IA):
                  "desde": "frase", "mantener": false}],
       "etiquetas": [{"texto": "California", "lugar": [lon, lat], "desde": "frase"}],
       "pines": [{"texto": "Ciudad de México", "lugar": [lon, lat], "desde": "frase"}],
-      "flechas": [{"puntos": [[lon,lat], [lon,lat], ...], "desde": "frase"}]
+      "flechas": [{"puntos": [[lon,lat], [lon,lat], ...], "desde": "frase"}],
+      "broll": {"motivo": "muralla", "desde": "frase"}     # dibujo animado a pantalla completa
     }
   ]
 }
@@ -28,6 +29,7 @@ Especificación (lo que escribe el guionista, humano o IA):
 import json, math, os, subprocess, unicodedata, gzip
 import numpy as np
 import skia
+from . import broll as _broll
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATOS = f"{RAIZ}/assets/datos"
@@ -240,7 +242,12 @@ class Short:
     def _resolver(self):
         t_prev = 0.0
         self.escenas = []
+        cam = [-40, 20, 120]
         for i, e in enumerate(self.spec["escenas"]):
+            e = dict(e)
+            if not (isinstance(e.get("camara"), list) and len(e["camara"]) == 3):
+                e["camara"] = list(cam)
+            cam = e["camara"]
             t0 = 0.0 if i == 0 else self.voz.en(e["desde"], t_prev)
             t_prev = t0
             self.escenas.append(dict(e, _t0=t0))
@@ -249,6 +256,16 @@ class Short:
             for grupo in ("zonas", "etiquetas", "pines", "flechas"):
                 for el in e.get(grupo, []):
                     el["_t"] = self.voz.en(el["desde"], e["_t0"]) if el.get("desde") else e["_t0"] + 0.15
+            b = e.get("broll")
+            if isinstance(b, str):
+                b = e["broll"] = {"motivo": b}
+            if isinstance(b, dict) and b.get("motivo"):
+                ti = self.voz.en(b["desde"], e["_t0"]) if b.get("desde") else e["_t0"]
+                ti = min(ti, e["_t1"] - 1.5)
+                b["_ti"] = max(e["_t0"], ti)
+                b["_tf"] = b["_ti"] + clamp(e["_t1"] - b["_ti"], 2.2, 5.0)
+            else:
+                e.pop("broll", None)
         # zonas que no existen se descartan con aviso, en vez de tumbar el video
         for e in self.escenas:
             buenas = []
@@ -420,6 +437,13 @@ class Short:
         if e.get("año"):
             f = fuente("HelveticaNowDisplay-Bold", 34 if self.vertical else 28)
             s = str(e["año"])
+            # el año corre como contador desde el año de la escena anterior
+            i = self.escenas.index(e)
+            prev = next((str(x.get("año")) for x in reversed(self.escenas[:i]) if x.get("año")), None)
+            if prev and s.isdigit() and prev[:4].isdigit() and len(s) == 4:
+                k = cubica((t - e["_t0"]) / 0.9)
+                if k < 1:
+                    s = str(round(int(prev[:4]) + (int(s) - int(prev[:4])) * k))
             esp = 12
             w = mide(f, s, esp)
             y = y_base - 92 + sube
@@ -441,7 +465,9 @@ class Short:
         if e.get("cifra"):
             ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
             f = fuente("HelveticaNowDisplay-Regular", 82 if self.vertical else 70)
-            y = (1290 if self.vertical else 860) + (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
+            hay_broll = e.get("broll") and e["broll"]["_ti"] - 0.3 <= t < e["broll"]["_tf"] + 0.3
+            y = (1470 if hay_broll else 1290) if self.vertical else (905 if hay_broll else 860)
+            y += (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
             escribe(c, e["cifra"], W / 2, y, f, ORO_CLARO, alfa=ac, sombra=0.9)
 
     def _subtitulos(self, c, t):
@@ -472,6 +498,45 @@ class Short:
                     escribe(c, p, x, y, f, ORO_CLARO if ahora else MARFIL, alfa=a * (1 if dicha else 0.5), centro=False, sombra=0.95)
                     x += an + esp
                 return
+
+    # ---- B-roll: dibujo de línea animado a pantalla completa
+    def _broll(self, c, t):
+        for e in self.escenas:
+            b = e.get("broll")
+            if not b or not (b["_ti"] - 0.05 <= t < b["_tf"] + 0.45):
+                continue
+            W, H = self.W, self.H
+            dur = b["_tf"] - b["_ti"]
+            entra = sale((t - b["_ti"]) / 0.55)
+            sal = 1 - clamp((t - b["_tf"]) / 0.45)
+            cx, cy = W / 2, H * (0.47 if self.vertical else 0.53)
+            c.save()
+            # entra como un círculo que se abre desde el centro
+            r = math.hypot(W, H) * 0.6 * entra
+            clip = skia.Path()
+            clip.addCircle(cx, cy, max(1, r))
+            c.clipPath(clip, doAntiAlias=True)
+            c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col(NOCHE, 0.94 * sal)))
+            c.saveLayerAlpha(None, int(255 * sal))
+            # papel cuadriculado tenue y un aro dorado que gira
+            gp = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.05), StrokeWidth=1)
+            paso = 60
+            off = (t * 12) % paso
+            for x in range(-paso, W + paso, paso):
+                c.drawLine(x + off, 0, x + off, H, gp)
+            for y in range(-paso, H + paso, paso):
+                c.drawLine(0, y + off, W, y + off, gp)
+            ap = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.25), Style=skia.Paint.kStroke_Style, StrokeWidth=2)
+            ap.setPathEffect(skia.DashPathEffect.Make([4, 14], t * 20))
+            c.drawCircle(cx, cy, 500 if self.vertical else 400, ap)
+            s = (1.5 if self.vertical else 1.0) * (1 + 0.04 * clamp((t - b["_ti"]) / dur))
+            u = clamp((t - b["_ti"]) / max(1.2, dur * 0.85))
+            try:
+                _broll.dibujar(c, b["motivo"], cx, cy, s, u, t)
+            except Exception as err:
+                print("Aviso broll:", err)
+            c.restore()
+            c.restore()
 
     def _hacer_grano(self):
         rng = np.random.default_rng(7)
@@ -539,6 +604,7 @@ class Short:
                 a = ventana(t, l_["_t"], e["_t1"] + 0.3, 0.4)
                 if a > 0:
                     self._etiqueta(c, *self.px(m, *l_["lugar"]), l_["texto"], a)
+        self._broll(c, t)
         self._acabado(c, t)
         for e in self.escenas:
             if e["_t0"] - 0.1 <= t < e["_t1"] + 0.6:

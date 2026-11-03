@@ -10,11 +10,12 @@ Personalidad del canal: documental premium, elegante y sobrio, como una serie de
 Nada de chistes, nada de exageraciones, nada de clickbait barato. Curiosidad, rigor y belleza.
 
 TU TRABAJO
-1. Investiga el tema con la búsqueda web (2 o más fuentes fiables). Si un dato no se puede confirmar, no lo uses.
+1. Investiga el tema con la búsqueda web: una o dos búsquedas bien hechas bastan (2 fuentes fiables). Si un dato no se puede confirmar, no lo uses.
 2. Escribe un guion en español neutro de México de 125 a 150 palabras (unos 50 a 58 segundos de voz).
    Primera frase gancho en forma de pregunta o dato sorprendente. Frases cortas. Cierre que deje pensando.
    Escribe los años y cifras con letra (mil ochocientos cuarenta y ocho, quince millones) para que la voz los lea bien.
-3. Dirige las escenas del video (de 7 a 11 escenas). Cada escena empieza cuando la voz dice su "desde".
+3. Dirige las escenas del video (de 10 a 14 escenas, una cada 4 o 5 segundos). Cada escena empieza cuando la voz dice su "desde".
+   El video debe sentirse vivo: la imagen cambia seguido, alternando mapas con dibujos animados (broll).
 
 FORMATO DE RESPUESTA
 Responde SOLO con un objeto JSON válido, sin texto antes ni después, con esta forma:
@@ -35,7 +36,8 @@ Responde SOLO con un objeto JSON válido, sin texto antes ni después, con esta 
       "zonas": [{"zona": "pais:MEX", "estilo": "oro", "desde": "palabras exactas", "mantener": false}],
       "etiquetas": [{"texto": "California", "lugar": [lon, lat], "desde": "palabras exactas"}],
       "pines": [{"texto": "Ciudad de México", "lugar": [lon, lat], "desde": "palabras exactas"}],
-      "flechas": [{"puntos": [[lon, lat], [lon, lat], [lon, lat]], "desde": "palabras exactas"}]
+      "flechas": [{"puntos": [[lon, lat], [lon, lat], [lon, lat]], "desde": "palabras exactas"}],
+      "broll": {"motivo": "muralla", "desde": "palabras exactas"}
     }
   ]
 }
@@ -50,6 +52,14 @@ REGLAS DE LAS ESCENAS
 - Estilos: "oro" (protagonista), "rojo" (pérdida, conflicto), "crema" (contexto), "contorno" (solo borde), "foco" (oscurece todo lo demás).
 - "camara": el video es vertical, así que el ancho visible va de 3 grados (una ciudad) a 60 grados (un continente).
   Encuadra para que lo importante quede en el centro. Cambia de cámara entre escenas para dar ritmo.
+- "broll" es un dibujo de líneas animado que tapa el mapa unos 3 a 5 segundos e ilustra lo que dice la voz.
+  Motivos disponibles: muralla, barco, tratado, ejercito, ciudad, tren, avion, montanas, rio, corona, bandera,
+  batalla, multitud, reloj, puente, brujula, frontera, libro, fuego, dinero.
+  Usa de 3 a 5 broll por video, en escenas donde la voz menciona algo que se puede dibujar
+  (un muro o fortaleza: muralla; una firma o acuerdo: tratado; una guerra: batalla; una venta o pago: dinero;
+  un viaje por mar: barco; un rey o imperio: corona; independencia: bandera; población: multitud; el paso del tiempo: reloj).
+  Nunca dos broll seguidos: entre uno y otro siempre va al menos una escena de mapa. La primera y la última escena son de mapa.
+  Una escena de broll puede no llevar "camara" (se queda la del mapa anterior) y casi siempre lleva "titulo" o "cifra".
 - Coordenadas reales y precisas (lon negativa al oeste, lat negativa al sur).
 """
 
@@ -59,10 +69,10 @@ def escribir(tema, api_key=None):
     mensajes = [{"role": "user", "content": f"Tema del video: {tema}"}]
     r = cliente.messages.create(
         model=MODELO,
-        max_tokens=20000,
-        system=SISTEMA,
+        max_tokens=12000,
+        system=[{"type": "text", "text": SISTEMA, "cache_control": {"type": "ephemeral"}}],
         messages=mensajes,
-        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}],
     )
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
     m = re.search(r"\{.*\}", texto, re.S)

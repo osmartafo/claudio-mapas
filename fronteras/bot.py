@@ -9,17 +9,18 @@ Le escribes un tema y te regresa el video listo con su título y descripción pa
   /estado            qué está haciendo ahora
 """
 import asyncio, os, logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import guionista
+from . import guionista, facebook
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
 PERMITIDOS = {int(x) for x in os.environ.get("TELEGRAM_USUARIOS", "").replace(" ", "").split(",") if x}
 cola = asyncio.Lock()
 estado = {"ahora": "libre"}
+hechos = {}  # videos listos para publicar, por número
 
 
 def autorizado(update: Update) -> bool:
@@ -52,8 +53,13 @@ async def _producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, h
 
         try:
             video, texto = await asyncio.to_thread(hacer_video, tema, horizontal, aviso)
+            n = len(hechos) + 1
+            hechos[n] = (video, texto)
+            botones = None
+            if facebook.configurado():
+                botones = InlineKeyboardMarkup([[InlineKeyboardButton("Publicar en Facebook", callback_data=f"fb:{n}")]])
             with open(video, "rb") as f:
-                await update.message.reply_video(f, caption=texto[:1000], supports_streaming=True,
+                await update.message.reply_video(f, caption=texto[:1000], supports_streaming=True, reply_markup=botones,
                                                  read_timeout=600, write_timeout=600)
             if len(texto) > 1000:
                 await update.message.reply_text(texto)
@@ -98,6 +104,26 @@ async def ver_estado(update, ctx):
         await update.message.reply_text(f"Ahora: {estado['ahora']}")
 
 
+async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not autorizado(update):
+        await q.answer()
+        return
+    await q.answer("Publicando…")
+    n = int(q.data.split(":")[1])
+    if n not in hechos:
+        await q.message.reply_text("Ese video ya no está en el servidor. Pídelo de nuevo.")
+        return
+    video, texto = hechos[n]
+    try:
+        liga = await asyncio.to_thread(facebook.publicar_reel, video, texto)
+        await q.edit_message_reply_markup(None)
+        await q.message.reply_text(f"Publicado en Facebook\n{liga}")
+    except Exception as e:
+        logging.exception("facebook")
+        await q.message.reply_text(f"No se pudo publicar en Facebook\n{type(e).__name__}: {e}")
+
+
 def main():
     app = Application.builder().token(os.environ["TELEGRAM_TOKEN"]).build()
     app.add_handler(CommandHandler("start", inicio))
@@ -105,6 +131,7 @@ def main():
     app.add_handler(CommandHandler("horizontal", horizontal))
     app.add_handler(CommandHandler("ideas", ideas))
     app.add_handler(CommandHandler("estado", ver_estado))
+    app.add_handler(CallbackQueryHandler(boton, pattern=r"^fb:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_libre))
     app.run_polling()
 

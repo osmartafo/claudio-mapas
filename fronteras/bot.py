@@ -359,7 +359,9 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             liga = await asyncio.to_thread(youtube.subir, video, texto)
             privado = os.environ.get("YOUTUBE_PRIVACIDAD", "private") != "public"
             nota = "\n<i>Quedó en privado. Revísalo en YouTube Studio y hazlo público cuando quieras.</i>" if privado else ""
-            await aviso.edit_text(f"✅ ▶️ YouTube\n{e(liga)}{nota}", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            await aviso.edit_text(f'📍 <b>Dónde quedó publicado</b>\n\n✅ ▶️ YouTube\n<a href="{e(liga)}">{e(liga)}</a>{nota}',
+                                  parse_mode=ParseMode.HTML, disable_web_page_preview=True,
+                                  reply_markup=Botones([[Boton("Ver en ▶️ YouTube", url=liga)]]))
         except Exception as err:
             logging.exception("yt")
             await aviso.edit_text(f"❌ ▶️ YouTube\n<code>{e(str(err)[:300])}</code>", parse_mode=ParseMode.HTML)
@@ -372,17 +374,20 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         video, texto, _, _ = hechos[n]
         destinos = {"fb": ["fb"], "ig": ["ig"], "meta": ["fb", "ig"]}[accion]
         aviso = await q.message.reply_text("🚀 Publicando…")
-        lineas = []
+        lineas, ligas = [], []
         for d in destinos:
             nombre = "📘 Facebook" if d == "fb" else "📸 Instagram"
             try:
                 funcion = facebook.publicar_reel if d == "fb" else facebook.publicar_instagram
                 liga = await asyncio.to_thread(funcion, video, texto)
-                lineas.append(f"✅ {nombre}\n{e(liga)}")
+                lineas.append(f'✅ {nombre}\n<a href="{e(liga)}">{e(liga)}</a>')
+                ligas.append((f"Ver en {nombre}", liga))
             except Exception as err:
                 logging.exception(d)
                 lineas.append(f"❌ {nombre}\n<code>{e(str(err)[:300])}</code>")
-            await aviso.edit_text("\n\n".join(lineas), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            await aviso.edit_text("📍 <b>Dónde quedó publicado</b>\n\n" + "\n\n".join(lineas), parse_mode=ParseMode.HTML,
+                                  disable_web_page_preview=True,
+                                  reply_markup=Botones([[Boton(t, url=u)] for t, u in ligas]) if ligas else None)
     else:
         await q.answer()
 

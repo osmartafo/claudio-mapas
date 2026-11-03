@@ -69,7 +69,29 @@ def publicar_reel(ruta_video, descripcion):
     _revisa(requests.post(f"{GRAPH}/{pagina}/video_reels", data={
         "upload_phase": "finish", "video_id": video_id, "video_state": "PUBLISHED",
         "description": descripcion[:2000], "access_token": token}, timeout=120))
+    _subidos[os.path.abspath(ruta_video)] = video_id
     return f"https://www.facebook.com/reel/{video_id}"
+
+
+_subidos = {}  # video local -> id del video ya subido a Facebook, para que Instagram lo tome de ahí
+
+
+def _url_en_facebook(ruta_video):
+    """Una dirección pública del video alojado en Facebook. Si aún no se subió, se sube oculto (sin publicar)."""
+    token, pagina = _token(), os.environ["FACEBOOK_PAGE_ID"]
+    vid = _subidos.get(os.path.abspath(ruta_video))
+    if not vid:
+        with open(ruta_video, "rb") as f:
+            d = _revisa(requests.post(f"https://graph-video.facebook.com/{V}/{pagina}/videos",
+                                      data={"published": "false", "no_story": "true", "access_token": token},
+                                      files={"source": ("video.mp4", f, "video/mp4")}, timeout=900))
+        vid = d["id"]
+    for _ in range(60):
+        r = requests.get(f"{GRAPH}/{vid}", params={"fields": "source", "access_token": token}, timeout=30)
+        if r.ok and r.json().get("source"):
+            return r.json()["source"]
+        time.sleep(5)
+    raise RuntimeError("Facebook no entregó la dirección del video para Instagram")
 
 
 # ---------------- Instagram ----------------
@@ -94,29 +116,36 @@ def instagram_configurado():
         return False
 
 
-def publicar_instagram(ruta_video, descripcion):
-    ig, token = instagram_id(), _token()
-    # 1. contenedor de Reel con subida directa del archivo
-    d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data={
-        "media_type": "REELS", "upload_type": "resumable", "caption": descripcion[:2200],
-        "share_to_feed": "true", "access_token": token}, timeout=60))
-    contenedor = d["id"]
-    tam = os.path.getsize(ruta_video)
-    with open(ruta_video, "rb") as f:
-        _revisa(requests.post(f"https://rupload.facebook.com/ig-api-upload/{V}/{contenedor}",
-                              headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(tam)},
-                              data=f, timeout=600))
-    # 2. esperar a que Instagram procese el video
-    for _ in range(60):
-        s = _revisa(requests.get(f"{GRAPH}/{contenedor}", params={"fields": "status_code,status", "access_token": token}, timeout=30))
-        if s.get("status_code") == "FINISHED":
+def _esperar_y_publicar(ig, contenedor, token):
+    for _ in range(90):
+        st = _revisa(requests.get(f"{GRAPH}/{contenedor}", params={"fields": "status_code,status", "access_token": token}, timeout=30))
+        if st.get("status_code") == "FINISHED":
             break
-        if s.get("status_code") == "ERROR":
-            raise RuntimeError(f"Instagram no pudo procesar el video: {s.get('status')}")
+        if st.get("status_code") == "ERROR":
+            raise RuntimeError(f"Instagram no pudo procesar el video: {st.get('status')}")
         time.sleep(5)
     else:
         raise RuntimeError("Instagram tardó demasiado en procesar el video")
-    # 3. publicar
     p = _revisa(requests.post(f"{GRAPH}/{ig}/media_publish", data={"creation_id": contenedor, "access_token": token}, timeout=60))
     link = _revisa(requests.get(f"{GRAPH}/{p['id']}", params={"fields": "permalink", "access_token": token}, timeout=30))
     return link.get("permalink") or "https://www.instagram.com/"
+
+
+def publicar_instagram(ruta_video, descripcion):
+    ig, token = instagram_id(), _token()
+    base = {"media_type": "REELS", "caption": descripcion[:2200], "share_to_feed": "true", "access_token": token}
+    # camino 1: subida directa del archivo
+    try:
+        d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, upload_type="resumable"), timeout=60))
+        contenedor = d["id"]
+        destino = d.get("uri") or f"https://rupload.facebook.com/ig-api-upload/{V}/{contenedor}"
+        datos = open(ruta_video, "rb").read()
+        _revisa(requests.post(destino, headers={"Authorization": f"OAuth {token}", "offset": "0",
+                                                "file_size": str(len(datos))}, data=datos, timeout=600))
+        return _esperar_y_publicar(ig, contenedor, token)
+    except Exception as err:
+        print("Instagram directo falló, uso la copia de Facebook:", err)
+    # camino 2: Instagram toma el video desde la copia alojada en Facebook
+    url = _url_en_facebook(ruta_video)
+    d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, video_url=url), timeout=60))
+    return _esperar_y_publicar(ig, d["id"], token)

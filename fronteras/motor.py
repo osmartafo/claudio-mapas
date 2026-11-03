@@ -555,7 +555,7 @@ class Short:
             self.dibujar(c, t)
         sup.makeImageSnapshot().save(ruta, skia.kJPEG)
 
-    def render(self, salida, voz_mp3=None, musica_wav=None):
+    def render(self, salida, voz_mp3=None, musica_wav=None, progreso=None):
         tmp = salida[:-4] + ".tmp.mp4"
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{self.W}x{self.H}",
                "-r", str(FPS), "-i", "-"]
@@ -575,7 +575,10 @@ class Short:
                 "-movflags", "+faststart", tmp]
         pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
         sup = skia.Surface(self.W, self.H)
-        for n in range(int(self.duracion * FPS)):
+        total = int(self.duracion * FPS)
+        for n in range(total):
+            if progreso and n % 150 == 0:
+                progreso(n / total)
             with sup as c:
                 self.dibujar(c, n / FPS)
             pr.stdin.write(sup.makeImageSnapshot().toarray(colorType=skia.kRGBA_8888_ColorType).tobytes())

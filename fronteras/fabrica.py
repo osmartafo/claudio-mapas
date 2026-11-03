@@ -19,31 +19,32 @@ def nombre_carpeta(tema):
     return time.strftime("%Y%m%d-%H%M") + "-" + "-".join(s.split()[:6])
 
 
-def hacer_video(tema, horizontal=False, aviso=print):
+def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a)):
     carpeta = os.path.join(SALIDA, nombre_carpeta(tema))
     os.makedirs(carpeta, exist_ok=True)
 
-    aviso("Investigando y escribiendo el guion…")
+    aviso(1, "Investigando el tema y escribiendo el guion")
     spec = guionista.escribir(tema)
     if horizontal:
         spec["formato"] = "horizontal"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
 
-    aviso("Grabando la voz…")
+    aviso(2, "Grabando la voz")
     voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json")
     v = Voz.de_archivo(f"{carpeta}/palabras.json")
 
-    aviso("Componiendo la música…")
+    aviso(3, "Componiendo la música")
     musica.componer(v.duracion + 3.2, f"{carpeta}/musica.wav", semilla=abs(hash(tema)) % 1000)
 
-    aviso("Animando los mapas…")
+    aviso(4, "Animando los mapas")
     try:
         short = Short(spec, v)
     except ValueError as e:  # una escena pide una palabra que la voz no dijo: se quita esa escena y se sigue
-        aviso(f"Ajuste automático: {e}")
+        aviso(4, "Animando los mapas (ajusté una escena)")
         spec["escenas"] = _limpia(spec, v)
         short = Short(spec, v)
-    video = short.render(f"{carpeta}/video.mp4", voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav")
+    video = short.render(f"{carpeta}/video.mp4", voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav",
+                         progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
     texto += "\n\nMapas y relieve de Natural Earth. Música original de FRONTERAS."

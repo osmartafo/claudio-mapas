@@ -46,7 +46,7 @@ Responde SOLO con un objeto JSON válido, sin texto antes ni después, con esta 
       "camara": [lon_centro, lat_centro, ancho_en_grados],
       "año": "1848",
       "titulo": "texto corto y elegante, máximo 5 palabras",
-      "cifra": "15 millones de dólares",
+      "cifra": "15 millones de dólares (máximo 4 palabras)",
       "zonas": [{"zona": "pais:MEX", "estilo": "oro", "desde": "palabras exactas", "mantener": false}],
       "etiquetas": [{"texto": "California", "lugar": [lon, lat], "desde": "palabras exactas"}],
       "pines": [{"texto": "Ciudad de México", "lugar": [lon, lat], "desde": "palabras exactas"}],
@@ -62,6 +62,8 @@ REGLAS DE LAS ESCENAS
 - "año", "titulo", "cifra", "zonas", "etiquetas", "pines" y "flechas" son opcionales. Cada escena con 1 o 2 cosas, nunca vacía.
 - "titulo" solo en 5 a 7 escenas clave (gancho, cada giro, revelación). Las demás escenas cambian con cámara, zona, cifra o dibujo.
 - "año" pon el año en cada escena donde cambie la época: el año corre como contador y suena un golpe, eso engancha.
+- Textos en pantalla cortos para que se lean en un celular: "titulo" máximo 5 palabras, "cifra" máximo 4 palabras,
+  etiquetas y pines máximo 3 palabras. Nada de frases largas en pantalla, eso lo dice la voz.
 - Los "desde" van de 2 a 3 palabras para que los cortes caigan exactos.
 - Zonas válidas: "pais:XXX" con el código ISO de 3 letras (MEX, USA, ESP, GBR, RUS, CHN...),
   "estado:ISO:nombre" para estados o provincias (estado:USA:texas, estado:MEX:chiapas, estado:ESP:andalucia),

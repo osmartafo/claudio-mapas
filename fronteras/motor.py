@@ -223,6 +223,26 @@ def parte_lineas(f, s, maximo, espacio=0.0):
     return lineas
 
 
+def bloque(s, nombre, tam, tam_min, ancho, max_lineas=2, espacio_rel=0.0):
+    """Ajusta un texto a una caja: parte en líneas y baja el tamaño hasta que cabe completo.
+    Regla de oro de FRONTERAS, ningún texto se sale de la pantalla."""
+    s = " ".join(str(s).split())
+    while True:
+        f = fuente(nombre, tam)
+        esp = tam * espacio_rel
+        lineas = parte_lineas(f, s, ancho, esp)
+        cabe = len(lineas) <= max_lineas and all(mide(f, l, esp) <= ancho for l in lineas)
+        if cabe or tam <= tam_min:
+            break
+        tam = max(tam_min, tam - 4)
+    if len(lineas) > max_lineas:  # último recurso, se recorta con puntos suspensivos
+        lineas = lineas[:max_lineas]
+        while lineas[-1] and mide(f, lineas[-1] + "…", esp) > ancho:
+            lineas[-1] = lineas[-1][:-1]
+        lineas[-1] = lineas[-1].rstrip() + "…"
+    return f, tam, lineas
+
+
 # ---------------- el motor ----------------
 class Short:
     def __init__(self, spec, voz):
@@ -230,6 +250,8 @@ class Short:
         vertical = spec.get("formato", "vertical") == "vertical"
         self.W, self.H = (1080, 1920) if vertical else (1920, 1080)
         self.vertical = vertical
+        # zona segura, lejos de los bordes y de los botones de Shorts, Reels y TikTok
+        self.ANCHO_SEGURO = 860 if vertical else 1560
         self.K = math.cos(math.radians(spec.get("latitud_media", 30)))
         self.geo = Geo(self.K)
         self.base = skia.Image.open(f"{DATOS}/base_fronteras.jpg")
@@ -369,12 +391,14 @@ class Short:
         if a <= 0.003:
             return
         tam = tam or (34 if self.vertical else 30)
-        f = fuente("HelveticaNowDisplay-Bold", tam)
         s = texto.upper()
+        f, tam, lin = bloque(s, "HelveticaNowDisplay-Bold", tam, 22, self.ANCHO_SEGURO - 80, 1, 0.16)
+        s = lin[0]
         esp = tam * 0.16
         w = mide(f, s, esp)
+        y = clamp(y, 160, self.H - 420 if self.vertical else self.H - 200)
         dy = (1 - sale(a)) * 14
-        margen = 44
+        margen = (self.W - self.ANCHO_SEGURO) / 2
         x_txt = clamp(x, margen + w / 2, self.W - margen - w / 2)
         # pequeño rombo dorado y texto marfil con espaciado amplio
         c.save()
@@ -449,6 +473,9 @@ class Short:
                 if k < 1:
                     s = str(round(int(prev[:4]) + (int(s) - int(prev[:4])) * k))
             esp = 12
+            while mide(f, s, esp) > self.ANCHO_SEGURO - 220 and f.getSize() > 20:
+                f = fuente("HelveticaNowDisplay-Bold", f.getSize() - 2)
+                esp = max(4, esp - 1)
             w = mide(f, s, esp)
             y = y_base - 92 + sube
             escribe(c, s, W / 2, y, f, ORO, alfa=a, espacio=esp)
@@ -457,29 +484,28 @@ class Short:
             c.drawLine(W / 2 - w / 2 - 24 - largo, y - 11, W / 2 - w / 2 - 24, y - 11, lp)
             c.drawLine(W / 2 + w / 2 + 24, y - 11, W / 2 + w / 2 + 24 + largo, y - 11, lp)
         if e.get("titulo"):
-            tam = 96 if self.vertical else 84
-            f = fuente("HelveticaNowDisplay-Bold", tam)
-            lineas = parte_lineas(f, e["titulo"], W - 150)
-            while len(lineas) > 2 and tam > 60:
-                tam -= 8
-                f = fuente("HelveticaNowDisplay-Bold", tam)
-                lineas = parte_lineas(f, e["titulo"], W - 150)
+            f, tam, lineas = bloque(e["titulo"], "HelveticaNowDisplay-Bold", 96 if self.vertical else 84, 48,
+                                    self.ANCHO_SEGURO, 3 if self.vertical else 2)
             for k, ln in enumerate(lineas):
                 escribe(c, ln, W / 2, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85)
         if e.get("cifra"):
             ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
-            f = fuente("HelveticaNowDisplay-Regular", 82 if self.vertical else 70)
+            f, tam, lineas = bloque(e["cifra"], "HelveticaNowDisplay-Regular", 82 if self.vertical else 70, 40,
+                                    self.ANCHO_SEGURO, 2)
             hay_broll = e.get("broll") and e["broll"]["_ti"] - 0.3 <= t < e["broll"]["_tf"] + 0.3
-            y = (1470 if hay_broll else 1290) if self.vertical else (905 if hay_broll else 860)
+            y = (1345 if hay_broll else 1250) if self.vertical else (880 if hay_broll else 840)
+            if not hay_broll:  # con dibujo en pantalla la cifra crece hacia abajo para no taparlo
+                y -= (len(lineas) - 1) * tam * 0.55
             y += (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
-            escribe(c, e["cifra"], W / 2, y, f, ORO_CLARO, alfa=ac, sombra=0.9)
+            for k, ln in enumerate(lineas):
+                escribe(c, ln, W / 2, y + k * tam * 1.05, f, ORO_CLARO, alfa=ac, sombra=0.9)
 
     def _subtitulos(self, c, t):
         pal = self.voz.palabras
         grupos, act = [], []
         for w in pal:
             act.append(w)
-            if len(act) >= 4 or len(" ".join(x["p"] for x in act)) > 22 or w["p"][-1] in ",.:?!;":
+            if len(act) >= 4 or len(" ".join(x["p"] for x in act)) > 20 or w["p"][-1] in ",.:?!;":
                 grupos.append(act)
                 act = []
         if act:
@@ -488,13 +514,17 @@ class Short:
             fin = grupos[i + 1][0]["t0"] if i + 1 < len(grupos) else g[-1]["t1"] + 0.6
             if g[0]["t0"] - 0.05 <= t < fin:
                 tam = 52 if self.vertical else 44
-                f = fuente("HelveticaNowDisplay-Bold", tam)
                 ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
-                esp = tam * 0.28
-                anchos = [mide(f, p) for p in ps]
-                total = sum(anchos) + esp * (len(ps) - 1)
+                while True:  # se encoge hasta que la frase cabe completa en la zona segura
+                    f = fuente("HelveticaNowDisplay-Bold", tam)
+                    esp = tam * 0.28
+                    anchos = [mide(f, p) for p in ps]
+                    total = sum(anchos) + esp * (len(ps) - 1)
+                    if total <= self.ANCHO_SEGURO or tam <= 30:
+                        break
+                    tam -= 2
                 x = self.W / 2 - total / 2
-                y = 1600 if self.vertical else 985
+                y = 1505 if self.vertical else 975
                 a = rampa(t, g[0]["t0"] - 0.05, 0.12)
                 for w, p, an in zip(g, ps, anchos):
                     dicha = t >= w["t0"] - 0.03
@@ -558,7 +588,7 @@ class Short:
             ap = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.25), Style=skia.Paint.kStroke_Style, StrokeWidth=2)
             ap.setPathEffect(skia.DashPathEffect.Make([4, 14], t * 20))
             c.drawCircle(cx, cy, 500 if self.vertical else 400, ap)
-            s = (1.5 if self.vertical else 1.0) * (1 + 0.04 * clamp((t - b["_ti"]) / dur))
+            s = (1.4 if self.vertical else 1.0) * (1 + 0.04 * clamp((t - b["_ti"]) / dur))
             u = clamp((t - b["_ti"]) / max(1.2, dur * 0.85))
             try:
                 _broll.dibujar(c, b["motivo"], cx, cy, s, u, t)

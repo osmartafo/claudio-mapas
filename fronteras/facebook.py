@@ -20,7 +20,7 @@ def _token():
     """Token de página. Si en Railway pegaron un token de usuario, aquí se cambia solo por el de la página."""
     if "pagina" in _cache:
         return _cache["pagina"]
-    tok = os.environ["FACEBOOK_PAGE_TOKEN"].strip()
+    tok = _token_crudo()
     try:
         r = requests.get(f"{GRAPH}/{os.environ['FACEBOOK_PAGE_ID']}", params={"fields": "access_token", "access_token": tok}, timeout=30)
         if r.ok and r.json().get("access_token"):
@@ -31,8 +31,18 @@ def _token():
     return tok
 
 
+def _token_crudo():
+    """El token de Meta, aunque se haya guardado en Railway con otro nombre (todos empiezan con EAA)."""
+    if os.environ.get("FACEBOOK_PAGE_TOKEN"):
+        return os.environ["FACEBOOK_PAGE_TOKEN"].strip()
+    for k, v in os.environ.items():
+        if v.strip().startswith("EAA") and len(v.strip()) > 80:
+            return v.strip()
+    return ""
+
+
 def configurado():
-    return bool(os.environ.get("FACEBOOK_PAGE_ID") and os.environ.get("FACEBOOK_PAGE_TOKEN"))
+    return bool(os.environ.get("FACEBOOK_PAGE_ID") and _token_crudo())
 
 
 def _revisa(r):

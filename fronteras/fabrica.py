@@ -6,7 +6,7 @@ Uso:
 """
 import json, os, re, sys, time, unicodedata
 
-from . import guionista, voz, musica
+from . import guionista, voz, musica, sfx
 from .motor import Short, Voz
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,7 +61,13 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False)
         aviso(4, "Animando los mapas (ajusté una escena)")
         spec["escenas"] = _limpia(spec, v)
         short = Short(spec, v)
-    video = short.render(f"{carpeta}/video.mp4", voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav",
+    try:
+        sfx.componer(short.duracion, short.eventos(), f"{carpeta}/sfx.wav")
+        fx = f"{carpeta}/sfx.wav"
+    except Exception as err:
+        print("Aviso sfx:", err)
+        fx = None
+    video = short.render(f"{carpeta}/video.mp4", voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav", sfx_wav=fx,
                          progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))

@@ -261,9 +261,9 @@ class Short:
                 b = e["broll"] = {"motivo": b}
             if isinstance(b, dict) and b.get("motivo"):
                 ti = self.voz.en(b["desde"], e["_t0"]) if b.get("desde") else e["_t0"]
-                ti = min(ti, e["_t1"] - 1.5)
+                ti = min(ti, e["_t1"] - 1.6)
                 b["_ti"] = max(e["_t0"], ti)
-                b["_tf"] = b["_ti"] + clamp(e["_t1"] - b["_ti"], 2.2, 5.0)
+                b["_tf"] = b["_ti"] + clamp(e["_t1"] - b["_ti"] - 0.2, 1.4, 5.0)
             else:
                 e.pop("broll", None)
         # zonas que no existen se descartan con aviso, en vez de tumbar el video
@@ -293,13 +293,17 @@ class Short:
         if i > 0:
             pl, pa, pw = self.escenas[i - 1]["camara"]
             pw *= 0.93
-            k = cubica((t - e_act["_t0"]) / 1.3)
+            # transición corta y con golpe: con tomas de 3 segundos no hay tiempo para viajes lentos
+            trans = clamp(0.3 * dur, 0.45, 1.1)
+            k = sale((t - e_act["_t0"]) / trans)
             lon = pl + (lon - pl) * k
             lat = pa + (lat - pa) * k
             ancho = math.exp(math.log(pw) + (math.log(ancho) - math.log(pw)) * k)
         else:  # apertura: baja desde muy lejos
             k = sale(t / 2.6)
             ancho = math.exp(math.log(ancho * 4.5) + (math.log(ancho) - math.log(ancho * 4.5)) * k)
+        # golpe de zoom al entrar cada toma
+        ancho *= 1 - 0.07 * math.exp(-max(0.0, t - e_act["_t0"]) * 5)
         lon += 0.12 * math.sin(t * 0.31)
         lat += 0.08 * math.cos(t * 0.27)
         return lon, lat, ancho
@@ -499,6 +503,31 @@ class Short:
                     x += an + esp
                 return
 
+    # ---- destello breve en cada corte, para que el cambio de toma se sienta
+    def _destello(self, c, t):
+        for e in self.escenas[1:]:
+            d = t - e["_t0"]
+            if 0 <= d < 0.18:
+                fuerte = 0.22 if (e.get("año") or e.get("broll")) else 0.12
+                c.drawRect(skia.Rect(0, 0, self.W, self.H),
+                           skia.Paint(Color4f=col(ORO_CLARO, fuerte * (1 - d / 0.18)), BlendMode=skia.BlendMode.kScreen))
+                return
+
+    # ---- momentos que llevan efecto de sonido
+    def eventos(self):
+        ev = []
+        for i, e in enumerate(self.escenas):
+            if i > 0:
+                ev.append((e["_t0"], "whoosh"))
+            if e.get("año") and i > 0:
+                ev.append((e["_t0"] + 0.05, "golpe"))
+                for k in range(6):
+                    ev.append((e["_t0"] + k * 0.13, "tic"))
+            if e.get("broll"):
+                ev.append((e["broll"]["_ti"] + 0.05, "golpe"))
+        ev.append((self.T_FIN, "golpe"))
+        return sorted(ev)
+
     # ---- B-roll: dibujo de línea animado a pantalla completa
     def _broll(self, c, t):
         for e in self.escenas:
@@ -605,6 +634,7 @@ class Short:
                 if a > 0:
                     self._etiqueta(c, *self.px(m, *l_["lugar"]), l_["texto"], a)
         self._broll(c, t)
+        self._destello(c, t)
         self._acabado(c, t)
         for e in self.escenas:
             if e["_t0"] - 0.1 <= t < e["_t1"] + 0.6:
@@ -621,7 +651,7 @@ class Short:
             self.dibujar(c, t)
         sup.makeImageSnapshot().save(ruta, skia.kJPEG)
 
-    def render(self, salida, voz_mp3=None, musica_wav=None, progreso=None):
+    def render(self, salida, voz_mp3=None, musica_wav=None, progreso=None, sfx_wav=None):
         tmp = salida[:-4] + ".tmp.mp4"
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{self.W}x{self.H}",
                "-r", str(FPS), "-i", "-"]
@@ -630,7 +660,10 @@ class Short:
             cmd += ["-i", voz_mp3]
         if musica_wav:
             cmd += ["-i", musica_wav]
-        if voz_mp3 and musica_wav:
+        if voz_mp3 and musica_wav and sfx_wav:
+            cmd += ["-i", sfx_wav, "-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[3:a]volume=0.32[fx];[vz2][mud][fx]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.95[aud]",
+                    "-map", "0:v", "-map", "[aud]"]
+        elif voz_mp3 and musica_wav:
             cmd += ["-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[vz2][mud]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[aud]",
                     "-map", "0:v", "-map", "[aud]"]
         elif voz_mp3 or musica_wav:

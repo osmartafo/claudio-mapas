@@ -428,7 +428,10 @@ async def al_arrancar(app: Application):
 
 
 def main():
+    # tiempos largos: subir un video de 30 MB o bajar un audio tarda más que los 5 s de fábrica
     app = (Application.builder().token(os.environ["TELEGRAM_TOKEN"]).post_init(al_arrancar)
+           .connect_timeout(30).read_timeout(120).write_timeout(300).pool_timeout(60)
+           .media_write_timeout(300).get_updates_read_timeout(60)
            .concurrent_updates(True).build())
     app.add_handler(CommandHandler("start", inicio))
     app.add_handler(CommandHandler("ayuda", ayuda))

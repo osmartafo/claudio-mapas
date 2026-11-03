@@ -19,7 +19,10 @@ ARCHIVO = os.path.join(CARPETA, "youtube.json")
 
 
 def _cliente():
-    return os.environ.get("YOUTUBE_CLIENT_ID", "").strip(), os.environ.get("YOUTUBE_CLIENT_SECRET", "").strip()
+    secreto = os.environ.get("YOUTUBE_CLIENT_SECRET", "").strip()
+    if not secreto:  # por si se guardó en Railway con otro nombre (los secretos de Google empiezan con GOCSPX)
+        secreto = next((v.strip() for v in os.environ.values() if v.strip().startswith("GOCSPX-")), "")
+    return os.environ.get("YOUTUBE_CLIENT_ID", "").strip(), secreto
 
 
 def tiene_cliente():

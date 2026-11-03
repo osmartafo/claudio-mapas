@@ -13,8 +13,22 @@ V = "v21.0"
 GRAPH = f"https://graph.facebook.com/{V}"
 
 
+_cache = {}
+
+
 def _token():
-    return os.environ["FACEBOOK_PAGE_TOKEN"]
+    """Token de página. Si en Railway pegaron un token de usuario, aquí se cambia solo por el de la página."""
+    if "pagina" in _cache:
+        return _cache["pagina"]
+    tok = os.environ["FACEBOOK_PAGE_TOKEN"].strip()
+    try:
+        r = requests.get(f"{GRAPH}/{os.environ['FACEBOOK_PAGE_ID']}", params={"fields": "access_token", "access_token": tok}, timeout=30)
+        if r.ok and r.json().get("access_token"):
+            tok = r.json()["access_token"]
+    except Exception:
+        pass
+    _cache["pagina"] = tok
+    return tok
 
 
 def configurado():

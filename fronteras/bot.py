@@ -10,7 +10,7 @@ from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import facebook, charla
+from . import youtube, facebook, charla
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
@@ -96,6 +96,8 @@ def botones_video(n):
     if facebook.configurado():
         filas.append([Boton("🚀 Publicar en Facebook e Instagram", callback_data=f"meta:{n}")])
         filas.append([Boton("📘 Solo Facebook", callback_data=f"fb:{n}"), Boton("📸 Solo Instagram", callback_data=f"ig:{n}")])
+    if youtube.configurado():
+        filas.append([Boton("▶️ Subir a YouTube", callback_data=f"yt:{n}")])
     filas.append([Boton("📋 Texto para YouTube", callback_data=f"txt:{n}"), Boton("🔁 Otra versión", callback_data=f"otra:{n}")])
     filas.append([Boton("💡 Más ideas", callback_data="mas")])
     return Botones(filas)
@@ -197,6 +199,14 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await ver_estado(update, ctx)
     elif t == B_AYUDA:
         await ayuda(update, ctx)
+    elif youtube.parece_respuesta(t):
+        try:
+            nombre = await asyncio.to_thread(youtube.conectar, t)
+            await update.message.reply_text(f"✅ YouTube conectado con <b>{e(nombre)}</b>. Desde ahora cada video trae el botón ▶️ Subir a YouTube.",
+                                            parse_mode=ParseMode.HTML)
+        except Exception as err:
+            logging.exception("youtube")
+            await update.message.reply_text(f"❌ No pude conectar YouTube\n<code>{e(str(err)[:300])}</code>", parse_mode=ParseMode.HTML)
     else:
         await platicar(update, ctx, t)
 
@@ -337,6 +347,22 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if n in hechos:
             _, _, tema, horizontal = hechos[n]
             asyncio.create_task(producir(update, ctx, tema, horizontal, nuevo=True))
+    elif accion == "yt":
+        await q.answer("▶️ Subiendo…")
+        n = int(valor)
+        if n not in hechos:
+            await q.message.reply_text("🔄 Ese video es de antes de una actualización. Pídelo de nuevo.")
+            return
+        video, texto, _, _ = hechos[n]
+        aviso = await q.message.reply_text("▶️ Subiendo a YouTube…")
+        try:
+            liga = await asyncio.to_thread(youtube.subir, video, texto)
+            privado = os.environ.get("YOUTUBE_PRIVACIDAD", "private") != "public"
+            nota = "\n<i>Quedó en privado. Revísalo en YouTube Studio y hazlo público cuando quieras.</i>" if privado else ""
+            await aviso.edit_text(f"✅ ▶️ YouTube\n{e(liga)}{nota}", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        except Exception as err:
+            logging.exception("yt")
+            await aviso.edit_text(f"❌ ▶️ YouTube\n<code>{e(str(err)[:300])}</code>", parse_mode=ParseMode.HTML)
     elif accion in ("fb", "ig", "meta"):
         await q.answer("🚀 Publicando…")
         n = int(valor)
@@ -361,6 +387,22 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.answer()
 
 
+async def cmd_youtube(update, ctx):
+    if not autorizado(update):
+        return
+    if not youtube.tiene_cliente():
+        await update.message.reply_text("Falta poner YOUTUBE_CLIENT_ID y YOUTUBE_CLIENT_SECRET en Railway.")
+        return
+    await update.message.reply_text(
+        "▶️ <b>Conectar YouTube</b>\n\n"
+        "1. Abre el enlace y entra con la cuenta dueña del canal de FRONTERAS\n"
+        "2. Si Google dice que la app no está verificada, toca <b>Continuar</b>\n"
+        "3. Acepta los permisos\n"
+        "4. Vas a llegar a una página que no carga. Copia la dirección completa de esa página y pégamela aquí\n\n"
+        f'<a href="{e(youtube.enlace_conexion())}">👉 Conectar mi canal</a>',
+        parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+
 async def al_arrancar(app: Application):
     await app.bot.set_my_commands([
         BotCommand("start", "Menú principal"),
@@ -369,6 +411,7 @@ async def al_arrancar(app: Application):
         BotCommand("horizontal", "Video 16:9 para YouTube"),
         BotCommand("formato", "Vertical u horizontal"),
         BotCommand("estado", "Qué estoy haciendo"),
+        BotCommand("youtube", "Conectar el canal de YouTube"),
         BotCommand("ayuda", "Cómo usarme"),
     ])
     try:
@@ -389,6 +432,7 @@ def main():
     app.add_handler(CommandHandler("horizontal", cmd_horizontal))
     app.add_handler(CommandHandler("formato", cmd_formato))
     app.add_handler(CommandHandler("estado", ver_estado))
+    app.add_handler(CommandHandler("youtube", cmd_youtube))
     app.add_handler(CallbackQueryHandler(botones))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_libre))

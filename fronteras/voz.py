@@ -7,7 +7,8 @@ import requests
 
 VOZ = os.environ.get("FRONTERAS_VOZ", "tBkfgTXKnmHoYewBvh7e")  # Eduardo, español mexicano
 VOZ_RESPALDO = os.environ.get("FRONTERAS_VOZ_RESPALDO", "JBFqnCBsd6RMkjVDRZzb")  # voz base de ElevenLabs, multilingüe
-MODELO = os.environ.get("FRONTERAS_MODELO_VOZ", "eleven_multilingual_v2")
+MODELO = os.environ.get("FRONTERAS_MODELO_VOZ", "eleven_v3")
+MODELOS = [MODELO, "eleven_v4", "eleven_multilingual_v2"]
 
 
 def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
@@ -17,18 +18,19 @@ def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
         {"stability": 0.55, "similarity_boost": 0.8},
     ]
     r = None
-    combinaciones = [(VOZ, a) for a in intentos] + [(VOZ_RESPALDO, intentos[1])]
-    for voz_id, ajustes in combinaciones:
+    combinaciones = [(VOZ, m, {"stability": 0.5} if m in ("eleven_v3", "eleven_v4") else intentos[1]) for m in dict.fromkeys(MODELOS)]
+    combinaciones.append((VOZ_RESPALDO, "eleven_multilingual_v2", intentos[0]))
+    for voz_id, modelo, ajustes in combinaciones:
         r = requests.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}/with-timestamps",
             headers={"xi-api-key": key, "Content-Type": "application/json"},
             params={"output_format": "mp3_44100_128"},
-            json={"text": texto, "model_id": MODELO, "voice_settings": ajustes},
+            json={"text": texto, "model_id": modelo, "voice_settings": ajustes},
             timeout=300,
         )
         if r.ok:
             break
-        logging.warning("ElevenLabs rechazó %s %s: %s", voz_id, r.status_code, r.text[:500])
+        logging.warning("ElevenLabs rechazó %s con %s, %s: %s", voz_id, modelo, r.status_code, r.text[:300])
     if not r.ok:
         try:
             detalle = r.json().get("detail", r.text)

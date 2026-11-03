@@ -565,8 +565,8 @@ class Short:
         if musica_wav:
             cmd += ["-i", musica_wav]
         if voz_mp3 and musica_wav:
-            cmd += ["-filter_complex", "[1:a]volume=1.0[v];[2:a]volume=0.22[m];[m][v]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[md];[v][md]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[a]",
-                    "-map", "0:v", "-map", "[a]"]
+            cmd += ["-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[vz2][mud]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[aud]",
+                    "-map", "0:v", "-map", "[aud]"]
         elif voz_mp3 or musica_wav:
             cmd += ["-map", "0:v", "-map", "1:a"]
         if voz_mp3 or musica_wav:

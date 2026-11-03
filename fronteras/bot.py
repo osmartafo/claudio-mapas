@@ -23,6 +23,18 @@ estado = {"ahora": "libre"}
 hechos = {}  # videos listos para publicar, por número
 
 
+def explica(e):
+    """Traduce los errores comunes a algo que se entienda."""
+    t = str(e)
+    if "credit balance is too low" in t:
+        return "Tu cuenta de Claude API se quedó sin saldo. Recarga en platform.claude.com, en Billing."
+    if "authentication" in t.lower() or "invalid x-api-key" in t.lower():
+        return "La llave de Claude no es válida. Revisa ANTHROPIC_API_KEY en Railway."
+    if "quota" in t.lower() and "eleven" in t.lower():
+        return "Se acabaron los créditos de ElevenLabs."
+    return f"Algo falló\n{type(e).__name__}: {t[:500]}"
+
+
 def autorizado(update: Update) -> bool:
     return not PERMITIDOS or update.effective_user.id in PERMITIDOS
 
@@ -65,7 +77,7 @@ async def _producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, h
                 await update.message.reply_text(texto)
         except Exception as e:  # el bot nunca se cae por un video fallido
             logging.exception("falló")
-            await update.message.reply_text(f"No salió «{tema}»\n{type(e).__name__}: {e}")
+            await update.message.reply_text(f"No salió «{tema}»\n{explica(e)}")
         finally:
             estado["ahora"] = "libre"
 
@@ -90,13 +102,18 @@ async def ideas(update, ctx):
     def pedir():
         import anthropic
         c = anthropic.Anthropic()
-        r = c.messages.create(model=guionista.MODELO, max_tokens=1500, messages=[{"role": "user", "content":
+        r = c.messages.create(model=guionista.MODELO, max_tokens=6000, messages=[{"role": "user", "content":
             "Dame 10 temas para FRONTERAS, un canal de documentales cortos de historia y geografía con mapas. "
             "Cada tema es una pregunta intrigante sobre por qué un territorio, frontera o ruta es como es, "
             "con un dato real y verificable. Mezcla México, Latinoamérica y el mundo. Solo la lista numerada."}])
-        return "".join(b.text for b in r.content if b.type == "text")
+        texto = "".join(b.text for b in r.content if b.type == "text").strip()
+        return texto or f"No me llegaron ideas esta vez (motivo {r.stop_reason}). Intenta de nuevo."
 
-    await update.message.reply_text(await asyncio.to_thread(pedir))
+    try:
+        await update.message.reply_text(await asyncio.to_thread(pedir))
+    except Exception as e:
+        logging.exception("ideas")
+        await update.message.reply_text(explica(e))
 
 
 async def ver_estado(update, ctx):

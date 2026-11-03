@@ -58,7 +58,7 @@ def escribir(tema, api_key=None):
     mensajes = [{"role": "user", "content": f"Tema del video: {tema}"}]
     r = cliente.messages.create(
         model=MODELO,
-        max_tokens=8000,
+        max_tokens=20000,
         system=SISTEMA,
         messages=mensajes,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
@@ -66,7 +66,7 @@ def escribir(tema, api_key=None):
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
     m = re.search(r"\{.*\}", texto, re.S)
     if not m:
-        raise ValueError("El guionista no devolvió JSON")
+        raise ValueError(f"El guionista no devolvió el guion (motivo {r.stop_reason}). Intenta de nuevo.")
     spec = json.loads(m.group(0))
     spec.setdefault("formato", "vertical")
     return spec

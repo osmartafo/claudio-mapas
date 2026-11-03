@@ -348,7 +348,7 @@ class Short:
         if a <= 0.003:
             return
         tam = tam or (34 if self.vertical else 30)
-        f = fuente("Sans-SemiBold", tam)
+        f = fuente("HelveticaNowDisplay-Bold", tam)
         s = texto.upper()
         esp = tam * 0.16
         w = mide(f, s, esp)
@@ -418,7 +418,7 @@ class Short:
         y_base = 300 if self.vertical else 150
         sube = (1 - sale((t - e["_t0"] - 0.1) / 0.9)) * 26
         if e.get("año"):
-            f = fuente("Sans-SemiBold", 34 if self.vertical else 28)
+            f = fuente("HelveticaNowDisplay-Bold", 34 if self.vertical else 28)
             s = str(e["año"])
             esp = 12
             w = mide(f, s, esp)
@@ -430,17 +430,17 @@ class Short:
             c.drawLine(W / 2 + w / 2 + 24, y - 11, W / 2 + w / 2 + 24 + largo, y - 11, lp)
         if e.get("titulo"):
             tam = 96 if self.vertical else 84
-            f = fuente("Serif-SemiBold", tam)
+            f = fuente("HelveticaNowDisplay-Bold", tam)
             lineas = parte_lineas(f, e["titulo"], W - 150)
             while len(lineas) > 2 and tam > 60:
                 tam -= 8
-                f = fuente("Serif-SemiBold", tam)
+                f = fuente("HelveticaNowDisplay-Bold", tam)
                 lineas = parte_lineas(f, e["titulo"], W - 150)
             for k, ln in enumerate(lineas):
                 escribe(c, ln, W / 2, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85)
         if e.get("cifra"):
             ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
-            f = fuente("Serif-Medium", 82 if self.vertical else 70)
+            f = fuente("HelveticaNowDisplay-Regular", 82 if self.vertical else 70)
             y = (1290 if self.vertical else 860) + (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
             escribe(c, e["cifra"], W / 2, y, f, ORO_CLARO, alfa=ac, sombra=0.9)
 
@@ -458,7 +458,7 @@ class Short:
             fin = grupos[i + 1][0]["t0"] if i + 1 < len(grupos) else g[-1]["t1"] + 0.6
             if g[0]["t0"] - 0.05 <= t < fin:
                 tam = 52 if self.vertical else 44
-                f = fuente("Sans-SemiBold", tam)
+                f = fuente("HelveticaNowDisplay-Bold", tam)
                 ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
                 esp = tam * 0.28
                 anchos = [mide(f, p) for p in ps]
@@ -495,7 +495,7 @@ class Short:
         c.drawImageRect(self._grano[int(t * FPS) % 4], skia.Rect(0, 0, W, H), skia.SamplingOptions(), gp)
 
     def _marca(self, c, t):
-        f = fuente("Serif-SemiBold", 30 if self.vertical else 26)
+        f = fuente("HelveticaNowDisplay-Bold", 30 if self.vertical else 26)
         y = self.H - 70 if self.vertical else self.H - 44
         a = 0.6 * (1 - rampa(t, self.T_FIN, 0.4))
         escribe(c, "FRONTERAS", self.W / 2, y, f, MARFIL, alfa=a, espacio=9, sombra=0.5)
@@ -507,12 +507,12 @@ class Short:
         W, H = self.W, self.H
         c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col(NOCHE, 0.9 * a)))
         cy = H / 2
-        f = fuente("Serif-SemiBold", 132 if self.vertical else 120)
+        f = fuente("HelveticaNowDisplay-Bold", 132 if self.vertical else 120)
         escribe(c, "FRONTERAS", W / 2, cy, f, MARFIL, alfa=a, espacio=22 * (0.6 + 0.4 * sale((t - self.T_FIN) / 1.6)))
         lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, a), StrokeWidth=2)
         L = 180 * sale((t - self.T_FIN - 0.3) / 1.0)
         c.drawLine(W / 2 - L, cy + 52, W / 2 + L, cy + 52, lp)
-        f2 = fuente("Serif-Medium", 46 if self.vertical else 40)
+        f2 = fuente("HelveticaNowDisplay-Regular", 46 if self.vertical else 40)
         escribe(c, "La historia que dibujó el mapa", W / 2, cy + 128, f2, ORO_CLARO, alfa=rampa(t, self.T_FIN + 0.5, 0.8))
 
     # ---- un fotograma

@@ -63,4 +63,4 @@ El video queda en `videos/`.
 
 ## Créditos y licencias
 
-Relieve y fronteras de Natural Earth, dominio público. Tipografías Noto Serif Display e Inter, licencia SIL Open Font. Música compuesta por el propio sistema. Ningún archivo de la plantilla comprada se usa aquí.
+Relieve y fronteras de Natural Earth, dominio público. Tipografía Helvetica Now Display, licencia de naked · agencia creativa. Música compuesta por el propio sistema. Ningún archivo de la plantilla comprada se usa aquí.

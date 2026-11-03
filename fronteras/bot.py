@@ -13,7 +13,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import guionista, facebook
+from . import guionista, facebook, charla
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
@@ -42,7 +42,7 @@ def autorizado(update: Update) -> bool:
 async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"FRONTERAS listo.\nTu número de usuario es {update.effective_user.id}\n\n"
-        "Escríbeme un tema, por ejemplo\npor qué Bolivia no tiene mar\n\n"
+        "Platica conmigo por texto o nota de voz. Pídeme ideas o dime un tema, por ejemplo\nhazme uno de por qué Bolivia no tiene mar\n\n"
         "/horizontal tema para video 16:9\n/ideas para diez temas nuevos")
 
 
@@ -90,30 +90,43 @@ async def horizontal(update, ctx):
     await _producir(update, ctx, " ".join(ctx.args), horizontal=True)
 
 
+async def _platicar(update, ctx, texto):
+    if not autorizado(update):
+        return
+    try:
+        await ctx.bot.send_chat_action(update.effective_chat.id, "typing")
+        respuesta, pedido = await asyncio.to_thread(charla.responder, update.effective_chat.id, texto)
+        await update.message.reply_text(respuesta)
+        if pedido and pedido.get("tema"):
+            asyncio.create_task(_producir(update, ctx, pedido["tema"], bool(pedido.get("horizontal"))))
+    except Exception as e:
+        logging.exception("charla")
+        await update.message.reply_text(explica(e))
+
+
 async def texto_libre(update, ctx):
-    await _producir(update, ctx, update.message.text)
+    await _platicar(update, ctx, update.message.text)
+
+
+async def voz(update, ctx):
+    if not autorizado(update):
+        return
+    try:
+        archivo = await (update.message.voice or update.message.audio).get_file()
+        datos = bytes(await archivo.download_as_bytearray())
+        texto = await asyncio.to_thread(charla.transcribir, datos)
+        if not texto:
+            await update.message.reply_text("No alcancé a oír nada, ¿me lo repites?")
+            return
+        await update.message.reply_text(f"Escuché: {texto}")
+        await _platicar(update, ctx, texto)
+    except Exception as e:
+        logging.exception("voz")
+        await update.message.reply_text(explica(e))
 
 
 async def ideas(update, ctx):
-    if not autorizado(update):
-        return
-    await update.message.reply_text("Buscando temas…")
-
-    def pedir():
-        import anthropic
-        c = anthropic.Anthropic()
-        r = c.messages.create(model=guionista.MODELO, max_tokens=6000, messages=[{"role": "user", "content":
-            "Dame 10 temas para FRONTERAS, un canal de documentales cortos de historia y geografía con mapas. "
-            "Cada tema es una pregunta intrigante sobre por qué un territorio, frontera o ruta es como es, "
-            "con un dato real y verificable. Mezcla México, Latinoamérica y el mundo. Solo la lista numerada."}])
-        texto = "".join(b.text for b in r.content if b.type == "text").strip()
-        return texto or f"No me llegaron ideas esta vez (motivo {r.stop_reason}). Intenta de nuevo."
-
-    try:
-        await update.message.reply_text(await asyncio.to_thread(pedir))
-    except Exception as e:
-        logging.exception("ideas")
-        await update.message.reply_text(explica(e))
+    await _platicar(update, ctx, "Dame 10 ideas de temas sencillos para videos")
 
 
 async def ver_estado(update, ctx):
@@ -149,6 +162,7 @@ def main():
     app.add_handler(CommandHandler("ideas", ideas))
     app.add_handler(CommandHandler("estado", ver_estado))
     app.add_handler(CallbackQueryHandler(boton, pattern=r"^fb:"))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_libre))
     app.run_polling()
 

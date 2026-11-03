@@ -1,5 +1,6 @@
 """El guionista de FRONTERAS: convierte un tema en guion verificado + escenas, en una sola llamada a Claude."""
 import json, os, re
+from json_repair import repair_json
 import anthropic
 
 MODELO = os.environ.get("FRONTERAS_MODELO", "claude-sonnet-5-5")
@@ -67,6 +68,6 @@ def escribir(tema, api_key=None):
     m = re.search(r"\{.*\}", texto, re.S)
     if not m:
         raise ValueError(f"El guionista no devolvió el guion (motivo {r.stop_reason}). Intenta de nuevo.")
-    spec = json.loads(m.group(0))
+    spec = json.loads(repair_json(m.group(0)))
     spec.setdefault("formato", "vertical")
     return spec

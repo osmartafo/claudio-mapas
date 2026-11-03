@@ -94,7 +94,8 @@ def botones_ideas(ideas):
 def botones_video(n):
     filas = []
     if facebook.configurado():
-        filas.append([Boton("📘 Publicar en Facebook", callback_data=f"fb:{n}")])
+        filas.append([Boton("🚀 Publicar en Facebook e Instagram", callback_data=f"meta:{n}")])
+        filas.append([Boton("📘 Solo Facebook", callback_data=f"fb:{n}"), Boton("📸 Solo Instagram", callback_data=f"ig:{n}")])
     filas.append([Boton("📋 Texto para YouTube", callback_data=f"txt:{n}"), Boton("🔁 Otra versión", callback_data=f"otra:{n}")])
     filas.append([Boton("💡 Más ideas", callback_data="mas")])
     return Botones(filas)
@@ -124,7 +125,7 @@ async def ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "🎙️ <b>Notas de voz.</b> Te escucho igual que por texto\n"
         "💡 <b>Ideas.</b> Toca una y empiezo el video\n"
         "📐 <b>Formato.</b> Vertical para Shorts y Reels, horizontal para YouTube normal\n"
-        "📘 <b>Facebook.</b> Al terminar cada video aparece el botón para publicarlo\n\n"
+        "🚀 <b>Redes.</b> Al terminar cada video aparece el botón para publicarlo en Facebook e Instagram\n\n"
         "Cada video tarda unos 5 minutos. Mientras, puedes seguir platicando conmigo.",
         parse_mode=ParseMode.HTML, reply_markup=TECLADO)
 
@@ -138,9 +139,9 @@ async def ver_estado(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ahora = "😴 Libre, listo para el siguiente video"
     fila = f"\n🕒 En fila {estado['en_fila']}" if estado["en_fila"] else ""
     fmt = "Horizontal 16:9" if es_horizontal(chat) else "Vertical 9:16"
-    fb = "conectado ✅" if facebook.configurado() else "sin conectar"
+    fb = "conectados ✅" if facebook.configurado() else "sin conectar"
     await update.effective_message.reply_text(
-        f"<b>📊 Estado</b>\n\n{ahora}{fila}\n📐 Formato {fmt}\n📘 Facebook {fb}\n🎞️ Videos de esta sesión {contador['video']}",
+        f"<b>📊 Estado</b>\n\n{ahora}{fila}\n📐 Formato {fmt}\n📘 Facebook e Instagram {fb}\n🎞️ Videos de esta sesión {contador['video']}",
         parse_mode=ParseMode.HTML)
 
 
@@ -336,19 +337,26 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if n in hechos:
             _, _, tema, horizontal = hechos[n]
             asyncio.create_task(producir(update, ctx, tema, horizontal))
-    elif accion == "fb":
-        await q.answer("📘 Publicando…")
+    elif accion in ("fb", "ig", "meta"):
+        await q.answer("🚀 Publicando…")
         n = int(valor)
         if n not in hechos:
-            await q.message.reply_text("Ese video ya no está en el servidor. Pídelo de nuevo.")
+            await q.message.reply_text("🔄 Ese video es de antes de una actualización. Pídelo de nuevo.")
             return
         video, texto, _, _ = hechos[n]
-        try:
-            liga = await asyncio.to_thread(facebook.publicar_reel, video, texto)
-            await q.message.reply_text(f"📘 <b>¡Publicado en Facebook!</b>\n{e(liga)}", parse_mode=ParseMode.HTML)
-        except Exception as err:
-            logging.exception("facebook")
-            await q.message.reply_text(explica(err), parse_mode=ParseMode.HTML)
+        destinos = {"fb": ["fb"], "ig": ["ig"], "meta": ["fb", "ig"]}[accion]
+        aviso = await q.message.reply_text("🚀 Publicando…")
+        lineas = []
+        for d in destinos:
+            nombre = "📘 Facebook" if d == "fb" else "📸 Instagram"
+            try:
+                funcion = facebook.publicar_reel if d == "fb" else facebook.publicar_instagram
+                liga = await asyncio.to_thread(funcion, video, texto)
+                lineas.append(f"✅ {nombre}\n{e(liga)}")
+            except Exception as err:
+                logging.exception(d)
+                lineas.append(f"❌ {nombre}\n<code>{e(str(err)[:300])}</code>")
+            await aviso.edit_text("\n\n".join(lineas), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     else:
         await q.answer()
 

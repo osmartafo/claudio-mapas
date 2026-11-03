@@ -299,6 +299,12 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if accion == "idea":
         tema = ideas_guardadas.get(int(valor))
+        if not tema:
+            await q.answer()
+            await q.message.reply_text("🔄 Ese botón es de antes de una actualización y ya no funciona. Toca Más ideas o escríbeme el tema.",
+                                       reply_markup=Botones([[Boton("💡 Más ideas", callback_data="mas"),
+                                                              Boton("✍️ Mi propio tema", callback_data="propio")]]))
+            return
         await q.answer("🎬 ¡Va!")
         if tema:
             await q.message.reply_text(f"👌 Elegiste <b>{e(tema)}</b>", parse_mode=ParseMode.HTML)
@@ -317,7 +323,9 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif accion == "txt":
         await q.answer()
         n = int(valor)
-        if n in hechos:
+        if n not in hechos:
+            await q.message.reply_text("🔄 Ese video es de antes de una actualización. Pídelo de nuevo.")
+        else:
             titulo, _, resto = hechos[n][1].partition("\n")
             await q.message.reply_text(f"📋 <b>Título</b>  toca para copiar\n<code>{e(titulo)}</code>\n\n"
                                        f"<b>Descripción</b>  toca para copiar\n<pre>{e(resto.strip())}</pre>",

@@ -2,10 +2,11 @@
 
 Usa el endpoint "with-timestamps", así no hace falta transcribir después (ahorra créditos y tiempo).
 """
-import base64, json, os
+import base64, json, logging, os
 import requests
 
 VOZ = os.environ.get("FRONTERAS_VOZ", "tBkfgTXKnmHoYewBvh7e")  # Eduardo, español mexicano
+VOZ_RESPALDO = os.environ.get("FRONTERAS_VOZ_RESPALDO", "JBFqnCBsd6RMkjVDRZzb")  # voz base de ElevenLabs, multilingüe
 MODELO = os.environ.get("FRONTERAS_MODELO_VOZ", "eleven_multilingual_v2")
 
 
@@ -16,9 +17,10 @@ def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
         {"stability": 0.55, "similarity_boost": 0.8},
     ]
     r = None
-    for ajustes in intentos:
+    combinaciones = [(VOZ, a) for a in intentos] + [(VOZ_RESPALDO, intentos[1])]
+    for voz_id, ajustes in combinaciones:
         r = requests.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{VOZ}/with-timestamps",
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}/with-timestamps",
             headers={"xi-api-key": key, "Content-Type": "application/json"},
             params={"output_format": "mp3_44100_128"},
             json={"text": texto, "model_id": MODELO, "voice_settings": ajustes},
@@ -26,6 +28,7 @@ def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
         )
         if r.ok:
             break
+        logging.warning("ElevenLabs rechazó %s %s: %s", voz_id, r.status_code, r.text[:500])
     if not r.ok:
         try:
             detalle = r.json().get("detail", r.text)

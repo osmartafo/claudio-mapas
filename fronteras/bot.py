@@ -23,8 +23,30 @@ cola = asyncio.Lock()
 estado = {"ahora": None, "inicio": 0.0, "en_fila": 0}
 formato = {}          # chat_id -> "vertical" | "horizontal"
 ideas_guardadas = {}  # id -> tema
-hechos = {}           # id -> (video, texto, tema, horizontal)
-contador = {"idea": 0, "video": 0}
+# los videos hechos se guardan en el disco permanente para que sus botones sigan sirviendo tras una actualización
+_HECHOS = "/data/hechos.json" if os.path.isdir("/data") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hechos.json")
+
+
+def _cargar_hechos():
+    try:
+        import json as _j
+        d = {int(k): tuple(v) for k, v in _j.load(open(_HECHOS)).items()}
+        return {k: v for k, v in d.items() if os.path.exists(v[0])}
+    except Exception:
+        return {}
+
+
+def _guardar_hechos():
+    try:
+        import json as _j
+        ultimos = dict(sorted(hechos.items())[-30:])
+        _j.dump({str(k): list(v) for k, v in ultimos.items()}, open(_HECHOS, "w"), ensure_ascii=False)
+    except Exception:
+        logging.exception("guardar hechos")
+
+
+hechos = _cargar_hechos()  # id -> (video, texto, tema, horizontal)
+contador = {"idea": 0, "video": max(hechos, default=0)}
 
 # botones del teclado de abajo
 B_IDEAS, B_NUEVO, B_FORMATO, B_ESTADO, B_AYUDA = "💡 Ideas", "🎬 Nuevo video", "📐 Formato", "📊 Estado", "❓ Ayuda"
@@ -260,6 +282,7 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
             contador["video"] += 1
             n = contador["video"]
             hechos[n] = (video, texto, tema, horizontal)
+            _guardar_hechos()
             seg = int(time.time() - estado["inicio"])
             await tarjeta.edit_text(f"🎬 <b>{e(tema)}</b>\n\n" + "\n".join(f"✅ {p}" for p in PASOS) +
                                     f"\n\n<code>{barra(1)}</code>\n⏱️ Listo en {seg // 60}:{seg % 60:02d}",

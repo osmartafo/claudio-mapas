@@ -10,7 +10,7 @@ from . import guionista, voz, musica, sfx
 from .motor import Short, Voz
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SALIDA = os.environ.get("FRONTERAS_SALIDA", f"{RAIZ}/videos")
+SALIDA = os.environ.get("FRONTERAS_SALIDA") or ("/data/videos" if os.path.isdir("/data") else f"{RAIZ}/videos")
 
 
 def _slug(tema):

@@ -182,10 +182,14 @@ def fuente(nombre, tam):
     return f
 
 
+SOMBRA_K = 1.0  # los looks claros bajan la sombra del texto
+
+
 def escribe(c, s, x, y, f, color, alfa=1.0, espacio=0.0, centro=True, sombra=0.6):
     """Texto con espaciado entre letras y sombra suave."""
     if alfa <= 0.003 or not s:
         return
+    sombra = sombra * SOMBRA_K
     anchos = f.getWidths(f.textToGlyphs(s))
     total = sum(anchos) + espacio * (len(s) - 1)
     x0 = x - total / 2 if centro else x
@@ -246,8 +250,10 @@ def bloque(s, nombre, tam, tam_min, ancho, max_lineas=2, espacio_rel=0.0):
 # ---------------- el motor ----------------
 def aplicar_paleta(clave):
     """Cambia los colores del motor y de los dibujos según la paleta del video."""
-    from . import estilos, broll
-    pal = estilos.PALETAS.get(clave) or estilos.PALETAS["noche_oro"]
+    from . import estilos, broll, looks
+    pal = estilos.PALETAS.get(clave) or looks.LOOKS.get(clave) or estilos.PALETAS["noche_oro"]
+    if "NOCHE" not in pal:
+        pal = estilos.PALETAS["noche_oro"]
     g = globals()
     for k in ("NOCHE", "MARFIL", "ORO", "ORO_CLARO", "CARMIN", "PIEDRA"):
         g[k] = pal[k]
@@ -259,12 +265,23 @@ def aplicar_paleta(clave):
 class Short:
     def __init__(self, spec, voz):
         self.spec, self.voz = spec, voz
-        from . import estilos
+        from . import estilos, looks
+        global SOMBRA_K
         est = spec.get("estilo") or {}
-        self.paleta = aplicar_paleta(est.get("paleta", "noche_oro"))
-        self.graf = estilos.GRAFICOS.get(est.get("grafico")) or estilos.GRAFICOS["clasico"]
-        tr, tg, tb = self.paleta["tinte"]
-        self._tinte = skia.Paint(ColorFilter=skia.ColorFilters.Matrix([tr, 0, 0, 0, 0, 0, tg, 0, 0, 0, 0, 0, tb, 0, 0, 0, 0, 0, 1, 0]))
+        self.clave_look = est.get("look", "noche") if est.get("look") in looks.LOOKS else "noche"
+        self.L = looks.LOOKS[self.clave_look]
+        if self.clave_look == "noche":
+            self.paleta = aplicar_paleta(est.get("paleta", "noche_oro"))
+            self.graf = dict(estilos.GRAFICOS.get(est.get("grafico")) or estilos.GRAFICOS["clasico"])
+            tr, tg, tb = self.paleta.get("tinte", (1, 1, 1))
+            self._tinte = skia.Paint(ColorFilter=skia.ColorFilters.Matrix([tr, 0, 0, 0, 0, 0, tg, 0, 0, 0, 0, 0, tb, 0, 0, 0, 0, 0, 1, 0]))
+            SOMBRA_K = 1.0
+        else:
+            self.paleta = aplicar_paleta(self.clave_look)
+            self.graf = {"subtitulo": self.L["sub"], "mayusculas": self.L.get("mayus_titulo", False), "linea": 1.0,
+                         "grano": self.L["grano"], "titulo": "centro", "tarjeta": "lisa"}
+            self._tinte = skia.Paint(ColorFilter=looks.duotono(*self.L["mapa"]), Alphaf=self.L.get("mapa_alfa", 1.0))
+            SOMBRA_K = self.L.get("sombra", 1.0)
         vertical = spec.get("formato", "vertical") == "vertical"
         self.W, self.H = (1080, 1920) if vertical else (1920, 1080)
         self.vertical = vertical
@@ -277,6 +294,8 @@ class Short:
         self.duracion = voz.duracion + 3.2
         self._resolver()
         self._grano = self._hacer_grano()
+        from . import looks as _lk
+        self.look = _lk.preparar(self, self.clave_look)
 
     # tiempos de cada escena y elemento, sacados de la voz
     def _resolver(self):
@@ -363,7 +382,8 @@ class Short:
 
     # ---- capas
     def _fondo(self, c, m):
-        c.clear(col(NOCHE))
+        if self.clave_look == "noche":
+            c.clear(col(NOCHE))
         c.save()
         c.concat(m)
         c.translate(-180 * self.K, -90)
@@ -478,10 +498,12 @@ class Short:
         if a <= 0.003:
             return
         W = self.W
-        y_base = 300 if self.vertical else 150
+        L = self.L
+        y_base = (L.get("y_titulo", 300) if self.vertical else 150)
         sube = (1 - sale((t - e["_t0"] - 0.1) / 0.9)) * 26
         if e.get("año"):
-            f = fuente("HelveticaNowDisplay-Bold", 34 if self.vertical else 28)
+            f_ano = L.get("f_ano", "HelveticaNowDisplay-Bold")
+            f = fuente(f_ano, 34 if self.vertical else 28)
             s = str(e["año"])
             # el año corre como contador desde el año de la escena anterior
             i = self.escenas.index(e)
@@ -492,18 +514,39 @@ class Short:
                     s = str(round(int(prev[:4]) + (int(s) - int(prev[:4])) * k))
             esp = 12
             while mide(f, s, esp) > self.ANCHO_SEGURO - 220 and f.getSize() > 20:
-                f = fuente("HelveticaNowDisplay-Bold", f.getSize() - 2)
+                f = fuente(f_ano, f.getSize() - 2)
                 esp = max(4, esp - 1)
             w = mide(f, s, esp)
-            y = y_base - 92 + sube
+            y = y_base - (128 if L.get("f_titulo") else 92) + sube
             escribe(c, s, W / 2, y, f, ORO, alfa=a, espacio=esp)
             lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.7 * a), StrokeWidth=2)
             largo = 70 * sale((t - e["_t0"]) / 0.8)
             c.drawLine(W / 2 - w / 2 - 24 - largo, y - 11, W / 2 - w / 2 - 24, y - 11, lp)
             c.drawLine(W / 2 + w / 2 + 24, y - 11, W / 2 + w / 2 + 24 + largo, y - 11, lp)
         if e.get("titulo"):
-            f, tam, lineas = bloque(e["titulo"], "HelveticaNowDisplay-Bold", 96 if self.vertical else 84, 48,
-                                    self.ANCHO_SEGURO, 3 if self.vertical else 2)
+            texto_t = e["titulo"].upper() if L.get("mayus_titulo") else e["titulo"]
+            max_l = 2 if (L.get("y_titulo") or not self.vertical) else 3
+            f, tam, lineas = bloque(texto_t, L.get("f_titulo", "HelveticaNowDisplay-Bold"), 104 if L.get("f_titulo") else (96 if self.vertical else 84), 44,
+                                    self.ANCHO_SEGURO - (60 if L.get("titulo_stickers") else 0), max_l)
+            if L.get("titulo_stickers"):  # cada línea es un recorte pegado, como en una mesa de trabajo
+                fondos = [L["CARMIN"], L["ORO"], "#FFFFFF", "#6B4226"]
+                for k, ln in enumerate(lineas):
+                    w_ = mide(f, ln)
+                    yk = y_base + sube + k * tam * 1.18
+                    c.save()
+                    c.rotate((-2.5 if k % 2 == 0 else 2.0), W / 2, yk - tam * 0.35)
+                    c.drawRect(skia.Rect.MakeXYWH(W / 2 - w_ / 2 - 26, yk - tam * 0.86, w_ + 52, tam * 1.12),
+                               skia.Paint(AntiAlias=True, Color4f=col(fondos[(k + self.escenas.index(e)) % 4], a)))
+                    tinta = "#3A2412" if fondos[(k + self.escenas.index(e)) % 4] in (L["ORO"], "#FFFFFF") else "#FFFFFF"
+                    escribe(c, ln, W / 2, yk, f, tinta, alfa=a, sombra=0)
+                    c.restore()
+                lineas = []
+            if L.get("brillo_titulo") and lineas:  # halo borroso tipo risografía
+                for k, ln in enumerate(lineas):
+                    g = skia.Paint(AntiAlias=True, Color4f=col(ORO_CLARO, 0.55 * a))
+                    g.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, tam * 0.18))
+                    w_ = mide(f, ln)
+                    c.drawString(ln, W / 2 - w_ / 2, y_base + sube + k * tam * 1.02, f, g)
             izq = self.graf["titulo"] == "izquierda"
             x_t = (W - self.ANCHO_SEGURO) / 2 if izq else W / 2
             if izq:  # barrita de acento a la izquierda del título
@@ -514,10 +557,11 @@ class Short:
                 escribe(c, ln, x_t, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85, centro=not izq)
         if e.get("cifra"):
             ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
-            f, tam, lineas = bloque(e["cifra"], "HelveticaNowDisplay-Regular", 82 if self.vertical else 70, 40,
-                                    self.ANCHO_SEGURO, 2)
+            grande = 190 if L.get("cifra_gigante") else (96 if L.get("f_cifra") else (82 if self.vertical else 70))
+            f, tam, lineas = bloque(e["cifra"], L.get("f_cifra", "HelveticaNowDisplay-Regular"), grande, 40,
+                                    self.ANCHO_SEGURO, L.get("lineas_cifra", 2))
             hay_broll = e.get("broll") and e["broll"]["_ti"] - 0.3 <= t < e["broll"]["_tf"] + 0.3
-            y = (1345 if hay_broll else 1250) if self.vertical else (880 if hay_broll else 840)
+            y = (1345 if hay_broll else L.get("y_cifra", 1250)) if self.vertical else (880 if hay_broll else 840)
             if not hay_broll:  # con dibujo en pantalla la cifra crece hacia abajo para no taparlo
                 y -= (len(lineas) - 1) * tam * 0.55
             y += (1 - sale((t - e["_t0"] - 0.5) / 0.9)) * 20
@@ -542,7 +586,7 @@ class Short:
                 if self.graf["mayusculas"]:
                     ps = [p.upper() for p in ps]
                 while True:  # se encoge hasta que la frase cabe completa en la zona segura
-                    f = fuente("HelveticaNowDisplay-Bold", tam)
+                    f = fuente(self.L.get("f_sub", "HelveticaNowDisplay-Bold"), tam)
                     esp = tam * 0.28
                     anchos = [mide(f, p) for p in ps]
                     total = sum(anchos) + esp * (len(ps) - 1)
@@ -649,6 +693,12 @@ class Short:
 
     def _acabado(self, c, t):
         W, H = self.W, self.H
+        if self.clave_look != "noche":
+            from . import looks as _lk
+            gp = skia.Paint(Alphaf=self.graf["grano"], BlendMode=skia.BlendMode.kOverlay)
+            c.drawImageRect(self._grano[int(t * FPS) % 4], skia.Rect(0, 0, W, H), skia.SamplingOptions(), gp)
+            _lk.acabado(self, c, t)
+            return
         vin = skia.Paint(Shader=skia.GradientShader.MakeRadial((W / 2, H / 2), max(W, H) * 0.72,
                          [col("#000000", 0).toColor(), col("#000000", 0.7).toColor()], [0.45, 1.0]))
         c.drawRect(skia.Rect(0, 0, W, H), vin)
@@ -683,6 +733,13 @@ class Short:
     # ---- un fotograma
     def dibujar(self, c, t):
         m, s = self.matriz(t)
+        from . import looks as _lk
+        if self.clave_look != "noche":
+            c.clear(col(NOCHE))
+            _lk.fondo_extra(self, c, t)
+        c.save()
+        if self.look.get("clip") is not None:
+            c.clipPath(self.look["clip"], doAntiAlias=True)
         self._fondo(c, m)
         # zonas (las de escenas pasadas con "mantener" siguen)
         for e in self.escenas:
@@ -696,6 +753,9 @@ class Short:
                 a = ventana(t, f_["_t"], e["_t1"] + 0.3, 0.4)
                 if a > 0:
                     self._flecha(c, [self.px(m, *p) for p in f_["puntos"]], cubica((t - f_["_t"]) / 1.4), a)
+        c.restore()
+        _lk.marco(self, c, t)
+        for e in self.escenas:
             for p_ in e.get("pines", []):
                 a = ventana(t, p_["_t"], e["_t1"] + 0.3, 0.4)
                 if a > 0:

@@ -89,6 +89,18 @@ def _historial():
         return []
 
 
+def _look(toma, rng):
+    """Un tercio de los videos usa el look clásico de noche; el resto rota entre los looks de las referencias."""
+    try:
+        from . import looks
+        otros = [k for k in looks.LOOKS if k != "noche"]
+    except Exception:
+        return "noche"
+    if rng.random() < 0.33:
+        return "noche"
+    return toma("look", otros, 3)
+
+
 def elegir(forzar=None):
     """Elige una combinación que no se parezca a las últimas. forzar permite fijar partes, ej. {"paleta": "neon"}."""
     hist = _historial()[-6:]
@@ -106,6 +118,7 @@ def elegir(forzar=None):
         "cerebro": toma("cerebro", list(CEREBROS), 3),
         "paleta": toma("paleta", list(PALETAS), 3),
         "grafico": toma("grafico", list(GRAFICOS), 2),
+        "look": _look(toma, rng),
         "voz": toma("voz", [v["id"] for v in voces], max(1, len(voces) - 1)),
         "musica": rng.randint(1, 10_000),
     }
@@ -118,8 +131,16 @@ def elegir(forzar=None):
 
 def describir(e):
     voz = next((v["nombre"] for v in _voces() if v["id"] == e.get("voz")), "voz")
-    return " · ".join([CEREBROS.get(e.get("cerebro"), {}).get("nombre", "?"), voz,
-                       PALETAS.get(e.get("paleta"), {}).get("nombre", "?"), GRAFICOS.get(e.get("grafico"), {}).get("nombre", "?")])
+    partes = [CEREBROS.get(e.get("cerebro"), {}).get("nombre", "?"), voz]
+    if e.get("look", "noche") != "noche":
+        try:
+            from . import looks
+            partes.append("Look " + looks.LOOKS[e["look"]].get("nombre", e["look"]))
+        except Exception:
+            partes.append(e["look"])
+    else:
+        partes += [PALETAS.get(e.get("paleta"), {}).get("nombre", "?"), GRAFICOS.get(e.get("grafico"), {}).get("nombre", "?")]
+    return " · ".join(partes)
 
 
 def instrucciones_guion(e):

@@ -131,8 +131,40 @@ def _esperar_y_publicar(ig, contenedor, token):
     return link.get("permalink") or "https://www.instagram.com/"
 
 
+def _copia_para_instagram(ruta_video):
+    """Instagram es muy exigente con el formato. Se hace una copia con la receta más segura de sus especificaciones:
+    H.264 perfil main, 30 fps constantes, GOP cerrado de 2 s, sin B frames, AAC estéreo 48 kHz, moov al inicio."""
+    import subprocess
+    salida = os.path.splitext(ruta_video)[0] + "_ig.mp4"
+    if os.path.exists(salida) and os.path.getmtime(salida) >= os.path.getmtime(ruta_video):
+        return salida
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta_video,
+                    "-c:v", "libx264", "-profile:v", "main", "-level:v", "4.1", "-pix_fmt", "yuv420p",
+                    "-r", "30", "-vsync", "cfr", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0", "-bf", "0",
+                    "-preset", "veryfast", "-crf", "21", "-maxrate", "8M", "-bufsize", "16M",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                    "-movflags", "+faststart", salida], check=True)
+    return salida
+
+
 def publicar_instagram(ruta_video, descripcion):
     ig, token = instagram_id(), _token()
+    try:
+        ruta_video = _copia_para_instagram(ruta_video)
+    except Exception as err:
+        print("No pude preparar la copia para Instagram:", err)
+    ultimo = None
+    for intento in range(3):  # Meta a veces falla sin razón, se reintenta con espera creciente
+        try:
+            return _publicar_instagram(ig, token, ruta_video, descripcion)
+        except Exception as err:
+            ultimo = err
+            print(f"Instagram intento {intento + 1} falló:", err)
+            time.sleep(20 * (intento + 1))
+    raise ultimo
+
+
+def _publicar_instagram(ig, token, ruta_video, descripcion):
     base = {"media_type": "REELS", "caption": descripcion[:2200], "share_to_feed": "true", "access_token": token}
     # camino 1: subida directa del archivo
     try:
@@ -147,5 +179,6 @@ def publicar_instagram(ruta_video, descripcion):
         print("Instagram directo falló, uso la copia de Facebook:", err)
     # camino 2: Instagram toma el video desde la copia alojada en Facebook
     url = _url_en_facebook(ruta_video)
+    print("Instagram toma el video desde Facebook")
     d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, video_url=url), timeout=60))
     return _esperar_y_publicar(ig, d["id"], token)

@@ -90,15 +90,18 @@ def _historial():
 
 
 def _look(toma, rng):
-    """Un tercio de los videos usa el look clásico de noche; el resto rota entre los looks de las referencias."""
+    """La mitad de los videos sale en Satélite a color, una quinta parte en Noche y el resto rota entre los looks de las referencias."""
     try:
         from . import looks
         otros = [k for k in looks.LOOKS if k != "noche"]
     except Exception:
         return "noche"
-    if rng.random() < 0.33:
+    r = rng.random()
+    if r < 0.50 and "satelite" in otros:  # el look a todo color es el principal
+        return "satelite"
+    if r < 0.70:
         return "noche"
-    return toma("look", otros, 3)
+    return toma("look", [o for o in otros if o != "satelite"], 3)
 
 
 def elegir(forzar=None):

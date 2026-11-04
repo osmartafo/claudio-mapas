@@ -75,7 +75,7 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False)
                          progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
-    texto += "\n\nMapas y relieve de Natural Earth. Música original de FRONTERAS."
+    texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de FRONTERAS."
     open(f"{carpeta}/descripcion.txt", "w").write(texto)
     return video, texto
 

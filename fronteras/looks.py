@@ -14,6 +14,14 @@ import skia
 # Colores por look: NOCHE es el fondo, MARFIL la tinta del texto, ORO el acento.
 LOOKS = {
     "noche": {"nombre": "Noche clásica"},
+    "satelite": {
+        "nombre": "Satélite a color",
+        "NOCHE": "#0B2A4A", "MARFIL": "#FFFFFF", "ORO": "#FFD23F", "ORO_CLARO": "#FFD23F", "CARMIN": "#FF4B3E", "PIEDRA": "#FFFFFF",
+        "mapa": None, "base": "base_satelite.jpg", "relieve": "satelite", "ventana": "completa",
+        "f_titulo": "HelveticaNowDisplay-ExtraBold", "f_cifra": "HelveticaNowDisplay-ExtraBold", "f_sub": "HelveticaNowDisplay-ExtraBold", "f_ano": "HelveticaNowDisplay-Bold",
+        "sub": "color", "mayus_titulo": False, "sombra": 1.6, "grano": 0.0,
+        "zonas_vivas": True, "etiqueta_pastilla": True,
+    },
     "papel": {
         "y_titulo": 235, "y_cifra": 1300, "lineas_cifra": 1,
         "nombre": "Papel rasgado",

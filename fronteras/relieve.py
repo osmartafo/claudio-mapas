@@ -179,7 +179,27 @@ def plan(camaras, K, W=1080, H=1920):
     return salida
 
 
-def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print):
+def _color_satelite(hs, elev, caja):
+    """Color natural (Blue Marble) con el relieve nítido de las teselas y la costa exacta de la elevación."""
+    from scipy.ndimage import gaussian_filter
+    D = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "datos")
+    alto, ancho = hs.shape
+    def capa(nombre):
+        im = Image.open(os.path.join(D, nombre))
+        bw, bh = im.size
+        x0, x1 = (caja[0] + 180) / 360 * bw, (caja[2] + 180) / 360 * bw
+        y0, y1 = (90 - caja[3]) / 180 * bh, (90 - caja[1]) / 180 * bh
+        return np.asarray(im.transform((ancho, alto), Image.EXTENT, (x0, y0, x1, y1), Image.BICUBIC)).astype(np.float32) / 255
+    tierra, mar = capa("satelite_tierra.jpg"), capa("satelite_mar.jpg")
+    detalle = hs - gaussian_filter(hs, 16)
+    tierra = tierra * (1 + detalle[..., None] * 1.7) * (0.82 + 0.3 * hs[..., None])
+    prof = np.clip(-elev / 4000, 0, 1)[..., None]
+    mar = mar * (1.08 - 0.25 * prof)
+    k = np.clip(gaussian_filter((elev > 0).astype(np.float32), 0.7), 0, 1)[..., None]
+    return np.clip(tierra * k + mar * (1 - k), 0, 1)
+
+
+def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print, modo="noche"):
     """Devuelve [(rgba uint8, caja)] listas para dibujar encima del mapa base."""
     resultado = []
     for z, caja in plan(camaras, K, W, H):
@@ -187,14 +207,19 @@ def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print):
             lista = teselas(caja, z)
             elev, x0, y0 = _mosaico(lista)
             hs, lat_filas = _sombreado(elev, z, y0)
-            rgb = _color(hs, elev)
             dens = 256 * 2 ** z / 360
-            eq = _a_equirect(rgb, lat_filas, z, x0, caja, dens, K)
-            if base_img is not None:
-                bw, bh = base_img.size
-                recorte = base_img.crop((int((caja[0] + 180) / 360 * bw), int((90 - caja[3]) / 180 * bh),
-                                         int((caja[2] + 180) / 360 * bw), int((90 - caja[1]) / 180 * bh)))
-                eq = _ajustar_a_base(eq, np.asarray(recorte).astype(np.float32) / 255)
+            # se pasa a lon/lat primero y se colorea ahí, así cualquier estilo usa la misma malla que el mapa base
+            par = _a_equirect(np.dstack([hs, elev]), lat_filas, z, x0, caja, dens, K)
+            hs_eq, elev_eq = par[..., 0], par[..., 1]
+            if modo == "satelite":
+                eq = _color_satelite(hs_eq, elev_eq, caja)
+            else:
+                eq = _color(hs_eq, elev_eq)
+                if base_img is not None:
+                    bw, bh = base_img.size
+                    recorte = base_img.crop((int((caja[0] + 180) / 360 * bw), int((90 - caja[3]) / 180 * bh),
+                                             int((caja[2] + 180) / 360 * bw), int((90 - caja[1]) / 180 * bh)))
+                    eq = _ajustar_a_base(eq, np.asarray(recorte).astype(np.float32) / 255)
             alfa = _difuminar_bordes(*eq.shape[:2])
             rgba = np.dstack([np.clip(eq, 0, 1) * 255, alfa * 255]).astype(np.uint8)
             resultado.append((rgba, caja))

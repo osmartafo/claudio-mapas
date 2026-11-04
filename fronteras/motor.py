@@ -280,7 +280,10 @@ class Short:
             self.paleta = aplicar_paleta(self.clave_look)
             self.graf = {"subtitulo": self.L["sub"], "mayusculas": self.L.get("mayus_titulo", False), "linea": 1.0,
                          "grano": self.L["grano"], "titulo": "centro", "tarjeta": "lisa"}
-            self._tinte = skia.Paint(ColorFilter=looks.duotono(*self.L["mapa"]), Alphaf=self.L.get("mapa_alfa", 1.0))
+            if self.L.get("mapa"):
+                self._tinte = skia.Paint(ColorFilter=looks.duotono(*self.L["mapa"]), Alphaf=self.L.get("mapa_alfa", 1.0))
+            else:  # mapa a color natural, sin teñir
+                self._tinte = skia.Paint(Alphaf=self.L.get("mapa_alfa", 1.0))
             SOMBRA_K = self.L.get("sombra", 1.0)
         vertical = spec.get("formato", "vertical") == "vertical"
         self.W, self.H = (1080, 1920) if vertical else (1920, 1080)
@@ -289,7 +292,7 @@ class Short:
         self.ANCHO_SEGURO = 860 if vertical else 1560
         self.K = math.cos(math.radians(spec.get("latitud_media", 30)))
         self.geo = Geo(self.K)
-        self.base = skia.Image.open(f"{DATOS}/base_fronteras.jpg")
+        self.base = skia.Image.open(f"{DATOS}/{self.L.get('base', 'base_fronteras.jpg')}")
         self.terr = spec.get("territorios", {})
         self.duracion = voz.duracion + 3.2
         self._resolver()
@@ -301,7 +304,8 @@ class Short:
                 from PIL import Image as _PI
                 _PI.MAX_IMAGE_PIXELS = None
                 base_pil = _PI.open(f"{DATOS}/base_fronteras.jpg").convert("RGB")
-                for rgba, caja in relieve.capas([e["camara"] for e in self.escenas], self.K, base_pil, self.W, self.H):
+                for rgba, caja in relieve.capas([e["camara"] for e in self.escenas], self.K, base_pil, self.W, self.H,
+                                                   modo=self.L.get("relieve", "noche")):
                     img = skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType, alphaType=skia.kUnpremul_AlphaType)
                     self.capas_relieve.append((img, caja))
             except Exception as ex:
@@ -413,18 +417,42 @@ class Short:
         c.save()
         c.concat(m)
         s = m.getScaleX()
-        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.16), Style=skia.Paint.kStroke_Style, StrokeWidth=1.6 * self.graf["linea"] / s)
+        alfa_b, grosor_b = (0.55, 2.0) if self.L.get("zonas_vivas") else (0.16, 1.6)
+        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, alfa_b), Style=skia.Paint.kStroke_Style, StrokeWidth=grosor_b * self.graf["linea"] / s)
         for _, path in self.geo.paises:
             c.drawPath(path, p)
         c.restore()
 
-    def _zona(self, c, m, path, estilo, a):
+    VIVOS = ["#4CC94B", "#F7A21B", "#3FA9F5", "#F4D03F", "#A55EEA", "#22C7B8", "#FF7AB6", "#FF8A3D"]
+
+    def _zona(self, c, m, path, estilo, a, clave=""):
         if a <= 0.003:
             return
         s = m.getScaleX()
+        if self.L.get("zonas_vivas") and estilo != "foco":
+            # relleno plano de color vivo con borde blanco; cada zona conserva su color en todo el video
+            if estilo == "rojo":
+                tono = "#FF4B3E"
+            else:
+                orden = self.__dict__.setdefault("_colores_zona", {})
+                tono = orden.setdefault(clave, self.VIVOS[len(orden) % len(self.VIVOS)])
+            relleno = 0.0 if estilo == "contorno" else 0.82
+            c.save()
+            c.concat(m)
+            if relleno:
+                c.drawPath(path, skia.Paint(AntiAlias=True, Color4f=col(tono, relleno * a)))
+            c.drawPath(path, skia.Paint(AntiAlias=True, Color4f=col("#FFFFFF", 0.95 * a), Style=skia.Paint.kStroke_Style,
+                                        StrokeWidth=3.4 / s, StrokeJoin=skia.Paint.kRound_Join))
+            c.restore()
+            return
         c.save()
         if estilo == "foco":
             c.restore()
+            if self.L.get("zonas_vivas"):  # en color: se apaga el resto y la zona se pinta
+                inv = skia.Path(path); inv.transform(m); inv.setFillType(skia.PathFillType.kInverseWinding)
+                c.drawPath(inv, skia.Paint(AntiAlias=True, Color4f=col("#000000", 0.42 * a)))
+                self._zona(c, m, path, "oro", a * 0.75, clave)
+                return
             inv = skia.Path(path)
             inv.transform(m)
             inv.setFillType(skia.PathFillType.kInverseWinding)
@@ -457,6 +485,14 @@ class Short:
         dy = (1 - sale(a)) * 14
         margen = (self.W - self.ANCHO_SEGURO) / 2
         x_txt = clamp(x, margen + w / 2, self.W - margen - w / 2)
+        if self.L.get("etiqueta_pastilla"):  # pastilla oscura con texto blanco, se lee sobre cualquier color
+            c.save()
+            c.translate(x, y + dy)
+            r = skia.RRect.MakeRectXY(skia.Rect.MakeXYWH(x_txt - x - w / 2 - 16, -tam * 1.42, w + 32, tam * 1.3), 10, 10)
+            c.drawRRect(r, skia.Paint(AntiAlias=True, Color4f=col("#10151C", 0.82 * a)))
+            escribe(c, s, x_txt - x, -tam * 0.42, f, "#FFFFFF", alfa=a, espacio=esp, sombra=0)
+            c.restore()
+            return
         # pequeño rombo dorado y texto marfil con espaciado amplio
         c.save()
         c.translate(x, y + dy)
@@ -766,7 +802,7 @@ class Short:
                 fin = self.T_FIN + 2 if z.get("mantener") else e["_t1"] + 0.3
                 a = ventana(t, z["_t"], fin, 0.6)
                 if a > 0:
-                    self._zona(c, m, self.geo.zona(z["zona"], self.terr), z.get("estilo", "oro"), a)
+                    self._zona(c, m, self.geo.zona(z["zona"], self.terr), z.get("estilo", "oro"), a, z["zona"])
         for e in self.escenas:
             for f_ in e.get("flechas", []):
                 a = ventana(t, f_["_t"], e["_t1"] + 0.3, 0.4)

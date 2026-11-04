@@ -294,6 +294,18 @@ class Short:
         self.duracion = voz.duracion + 3.2
         self._resolver()
         self._grano = self._hacer_grano()
+        self.capas_relieve = []
+        if os.environ.get("FRONTERAS_RELIEVE", "1") != "0":
+            try:
+                from . import relieve
+                from PIL import Image as _PI
+                _PI.MAX_IMAGE_PIXELS = None
+                base_pil = _PI.open(f"{DATOS}/base_fronteras.jpg").convert("RGB")
+                for rgba, caja in relieve.capas([e["camara"] for e in self.escenas], self.K, base_pil, self.W, self.H):
+                    img = skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType, alphaType=skia.kUnpremul_AlphaType)
+                    self.capas_relieve.append((img, caja))
+            except Exception as ex:
+                print(f"relieve en alta no disponible: {ex}")
         from . import looks as _lk
         self.look = _lk.preparar(self, self.clave_look)
 
@@ -390,6 +402,13 @@ class Short:
         c.scale(self.K * 360 / self.base.width(), 180 / self.base.height())
         c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear), self._tinte)
         c.restore()
+        # relieve en alta resolución de la zona del video, encima del mapa base
+        for img, (lon0, lat0, lon1, lat1) in self.capas_relieve:
+            c.save()
+            c.concat(m)
+            c.drawImageRect(img, skia.Rect(lon0 * self.K, -lat1, lon1 * self.K, -lat0),
+                            skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear), self._tinte)
+            c.restore()
         # fronteras de países, finas y discretas
         c.save()
         c.concat(m)

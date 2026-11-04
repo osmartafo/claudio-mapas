@@ -820,7 +820,7 @@ class Short:
             cmd += ["-map", "0:v", "-map", "1:a"]
         if voz_mp3 or musica_wav:
             cmd += ["-c:a", "aac", "-b:a", "192k"]
-        cmd += ["-t", f"{self.duracion:.2f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
+        cmd += ["-t", f"{self.duracion:.2f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-maxrate", "12M", "-bufsize", "24M", "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart", tmp]
         pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
         sup = skia.Surface(self.W, self.H)

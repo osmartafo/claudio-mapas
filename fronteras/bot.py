@@ -290,7 +290,8 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
             titulo, _, resto = texto.partition("\n")
             caption = f"<b>{e(titulo)}</b>\n\n{e(resto.strip()[:850])}"
             await ctx.bot.send_chat_action(msg.chat_id, ChatAction.UPLOAD_VIDEO)
-            with open(video, "rb") as f:
+            envio = await asyncio.to_thread(copia_telegram, video)
+            with open(envio, "rb") as f:
                 await msg.reply_video(f, caption=caption, parse_mode=ParseMode.HTML, supports_streaming=True,
                                       reply_markup=botones_video(n), read_timeout=600, write_timeout=600)
         except Exception as err:
@@ -301,6 +302,27 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
                                     reply_markup=Botones([[Boton("🔁 Intentar de nuevo", callback_data=f"idea:{contador['idea']}")]]))
         finally:
             estado["ahora"] = None
+
+
+def copia_telegram(video, limite=48 * 1024 * 1024):
+    """Telegram no deja mandar videos de más de 50 MB. Si el original pesa más, se manda una copia más ligera;
+    el original de alta calidad se queda para YouTube, Facebook e Instagram."""
+    if os.path.getsize(video) <= limite:
+        return video
+    import subprocess
+    copia = video[:-4] + "_tg.mp4"
+    if os.path.exists(copia) and os.path.getsize(copia) <= limite:
+        return copia
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video],
+                               capture_output=True, text=True).stdout.strip() or 90)
+    kbps = int(limite * 8 / 1024 * 0.92 / dur) - 160
+    for k in (kbps, int(kbps * 0.75)):
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", video, "-c:v", "libx264", "-preset", "veryfast",
+                        "-b:v", f"{k}k", "-maxrate", f"{int(k * 1.3)}k", "-bufsize", f"{k * 2}k", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", copia], check=True)
+        if os.path.getsize(copia) <= limite:
+            break
+    return copia
 
 
 async def cmd_video(update, ctx):

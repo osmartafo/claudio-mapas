@@ -244,9 +244,27 @@ def bloque(s, nombre, tam, tam_min, ancho, max_lineas=2, espacio_rel=0.0):
 
 
 # ---------------- el motor ----------------
+def aplicar_paleta(clave):
+    """Cambia los colores del motor y de los dibujos según la paleta del video."""
+    from . import estilos, broll
+    pal = estilos.PALETAS.get(clave) or estilos.PALETAS["noche_oro"]
+    g = globals()
+    for k in ("NOCHE", "MARFIL", "ORO", "ORO_CLARO", "CARMIN", "PIEDRA"):
+        g[k] = pal[k]
+    rgb = lambda h: tuple(int(h.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    broll.MARFIL, broll.ORO, broll.ORO_CLARO, broll.CARMIN = rgb(pal["MARFIL"]), rgb(pal["ORO"]), rgb(pal["ORO_CLARO"]), rgb(pal["CARMIN"])
+    return pal
+
+
 class Short:
     def __init__(self, spec, voz):
         self.spec, self.voz = spec, voz
+        from . import estilos
+        est = spec.get("estilo") or {}
+        self.paleta = aplicar_paleta(est.get("paleta", "noche_oro"))
+        self.graf = estilos.GRAFICOS.get(est.get("grafico")) or estilos.GRAFICOS["clasico"]
+        tr, tg, tb = self.paleta["tinte"]
+        self._tinte = skia.Paint(ColorFilter=skia.ColorFilters.Matrix([tr, 0, 0, 0, 0, 0, tg, 0, 0, 0, 0, 0, tb, 0, 0, 0, 0, 0, 1, 0]))
         vertical = spec.get("formato", "vertical") == "vertical"
         self.W, self.H = (1080, 1920) if vertical else (1920, 1080)
         self.vertical = vertical
@@ -350,13 +368,13 @@ class Short:
         c.concat(m)
         c.translate(-180 * self.K, -90)
         c.scale(self.K * 360 / self.base.width(), 180 / self.base.height())
-        c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear))
+        c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear), self._tinte)
         c.restore()
         # fronteras de países, finas y discretas
         c.save()
         c.concat(m)
         s = m.getScaleX()
-        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.16), Style=skia.Paint.kStroke_Style, StrokeWidth=1.6 / s)
+        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.16), Style=skia.Paint.kStroke_Style, StrokeWidth=1.6 * self.graf["linea"] / s)
         for _, path in self.geo.paises:
             c.drawPath(path, p)
         c.restore()
@@ -486,8 +504,14 @@ class Short:
         if e.get("titulo"):
             f, tam, lineas = bloque(e["titulo"], "HelveticaNowDisplay-Bold", 96 if self.vertical else 84, 48,
                                     self.ANCHO_SEGURO, 3 if self.vertical else 2)
+            izq = self.graf["titulo"] == "izquierda"
+            x_t = (W - self.ANCHO_SEGURO) / 2 if izq else W / 2
+            if izq:  # barrita de acento a la izquierda del título
+                c.drawRect(skia.Rect.MakeXYWH(x_t, y_base + sube - tam * 0.8, 8, tam * 0.9 * len(lineas)),
+                           skia.Paint(Color4f=col(ORO, a)))
+                x_t += 30
             for k, ln in enumerate(lineas):
-                escribe(c, ln, W / 2, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85)
+                escribe(c, ln, x_t, y_base + sube + k * tam * 1.02, f, MARFIL, alfa=a, sombra=0.85, centro=not izq)
         if e.get("cifra"):
             ac = ventana(t, e["_t0"] + 0.5, e["_t1"] + 0.05, 0.45)
             f, tam, lineas = bloque(e["cifra"], "HelveticaNowDisplay-Regular", 82 if self.vertical else 70, 40,
@@ -515,6 +539,8 @@ class Short:
             if g[0]["t0"] - 0.05 <= t < fin:
                 tam = 52 if self.vertical else 44
                 ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
+                if self.graf["mayusculas"]:
+                    ps = [p.upper() for p in ps]
                 while True:  # se encoge hasta que la frase cabe completa en la zona segura
                     f = fuente("HelveticaNowDisplay-Bold", tam)
                     esp = tam * 0.28
@@ -529,7 +555,16 @@ class Short:
                 for w, p, an in zip(g, ps, anchos):
                     dicha = t >= w["t0"] - 0.03
                     ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
-                    escribe(c, p, x, y, f, ORO_CLARO if ahora else MARFIL, alfa=a * (1 if dicha else 0.5), centro=False, sombra=0.95)
+                    modo = self.graf["subtitulo"]
+                    if ahora and modo == "caja":
+                        c.drawRoundRect(skia.Rect.MakeXYWH(x - tam * 0.18, y - tam * 0.86, an + tam * 0.36, tam * 1.1), 10, 10,
+                                        skia.Paint(AntiAlias=True, Color4f=col(ORO, a)))
+                        escribe(c, p, x, y, f, NOCHE, alfa=a, centro=False, sombra=0)
+                    else:
+                        color = ORO_CLARO if (ahora and modo == "color") else MARFIL
+                        escribe(c, p, x, y, f, color, alfa=a * (1 if dicha else 0.5), centro=False, sombra=0.95)
+                        if ahora and modo == "linea":
+                            c.drawRect(skia.Rect.MakeXYWH(x, y + tam * 0.14, an, tam * 0.09), skia.Paint(Color4f=col(ORO, a)))
                     x += an + esp
                 return
 
@@ -581,10 +616,16 @@ class Short:
             gp = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, 0.05), StrokeWidth=1)
             paso = 60
             off = (t * 12) % paso
-            for x in range(-paso, W + paso, paso):
-                c.drawLine(x + off, 0, x + off, H, gp)
-            for y in range(-paso, H + paso, paso):
-                c.drawLine(0, y + off, W, y + off, gp)
+            if self.graf["tarjeta"] == "cuadricula":
+                for x in range(-paso, W + paso, paso):
+                    c.drawLine(x + off, 0, x + off, H, gp)
+                for y in range(-paso, H + paso, paso):
+                    c.drawLine(0, y + off, W, y + off, gp)
+            elif self.graf["tarjeta"] == "puntos":
+                gp.setColor4f(col(MARFIL, 0.10))
+                for x in range(-paso, W + paso, paso // 2 * 2):
+                    for y in range(-paso, H + paso, paso):
+                        c.drawCircle(x + off, y + off, 1.6, gp)
             ap = skia.Paint(AntiAlias=True, Color4f=col(ORO, 0.25), Style=skia.Paint.kStroke_Style, StrokeWidth=2)
             ap.setPathEffect(skia.DashPathEffect.Make([4, 14], t * 20))
             c.drawCircle(cx, cy, 500 if self.vertical else 400, ap)
@@ -615,7 +656,7 @@ class Short:
         for y0, y1, a0, a1 in ((0, H * 0.28, 0.75, 0), (H * 0.70, H, 0, 0.8)):
             g = skia.Paint(Shader=skia.GradientShader.MakeLinear([(0, y0), (0, y1)], [col("#000000", a0).toColor(), col("#000000", a1).toColor()]))
             c.drawRect(skia.Rect(0, y0, W, y1), g)
-        gp = skia.Paint(Alphaf=0.07, BlendMode=skia.BlendMode.kOverlay)
+        gp = skia.Paint(Alphaf=self.graf["grano"], BlendMode=skia.BlendMode.kOverlay)
         c.drawImageRect(self._grano[int(t * FPS) % 4], skia.Rect(0, 0, W, H), skia.SamplingOptions(), gp)
 
     def _marca(self, c, t):

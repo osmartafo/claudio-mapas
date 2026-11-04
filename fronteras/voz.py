@@ -11,14 +11,18 @@ MODELO = os.environ.get("FRONTERAS_MODELO_VOZ", "eleven_v3")
 MODELOS = [MODELO, "eleven_v4", "eleven_multilingual_v2"]
 
 
-def generar(texto, ruta_mp3, ruta_palabras, api_key=None):
+def generar(texto, ruta_mp3, ruta_palabras, api_key=None, voz_id=None):
     key = api_key or os.environ["ELEVENLABS_API_KEY"]
     intentos = [
         {"stability": 0.55, "similarity_boost": 0.8, "style": 0.15, "speed": 0.95},
         {"stability": 0.55, "similarity_boost": 0.8},
     ]
     r = None
-    combinaciones = [(VOZ, m, {"stability": 0.5} if m in ("eleven_v3", "eleven_v4") else intentos[1]) for m in dict.fromkeys(MODELOS)]
+    principal = voz_id or VOZ
+    combinaciones = [(principal, m, {"stability": 0.5} if m in ("eleven_v3", "eleven_v4") else intentos[1]) for m in dict.fromkeys(MODELOS)]
+    combinaciones.append((principal, "eleven_multilingual_v2", intentos[0]))
+    if principal != VOZ:
+        combinaciones.append((VOZ, "eleven_v3", {"stability": 0.5}))
     combinaciones.append((VOZ_RESPALDO, "eleven_multilingual_v2", intentos[0]))
     for voz_id, modelo, ajustes in combinaciones:
         r = requests.post(

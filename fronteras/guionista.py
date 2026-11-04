@@ -85,9 +85,10 @@ REGLAS DE LAS ESCENAS
 """
 
 
-def escribir(tema, api_key=None):
+def escribir(tema, api_key=None, estilo_texto=""):
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-    mensajes = [{"role": "user", "content": f"Tema del video: {tema}"}]
+    # el estilo va en el mensaje y no en el sistema, así el sistema se queda en caché y sale más barato
+    mensajes = [{"role": "user", "content": f"Tema del video: {tema}\n\n{estilo_texto}".strip()}]
     # se pide en streaming: con un tope alto de salida la API lo exige y nunca se queda corto el guion
     with cliente.messages.stream(
         model=MODELO,

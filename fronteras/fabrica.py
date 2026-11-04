@@ -6,7 +6,7 @@ Uso:
 """
 import json, os, re, sys, time, unicodedata
 
-from . import guionista, voz, musica, sfx
+from . import guionista, voz, musica, sfx, estilos
 from .motor import Short, Voz
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,18 +41,22 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False)
     aviso(1, "Investigando el tema y escribiendo el guion")
     if previa:
         spec = json.load(open(f"{carpeta}/spec.json"))
+        est = spec.get("estilo") or estilos.elegir()
     else:
-        spec = guionista.escribir(tema)
+        est = estilos.elegir()
+        aviso(1, f"Escribiendo con estilo {estilos.describir(est)}")
+        spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est))
+    spec["estilo"] = est
     spec["formato"] = "horizontal" if horizontal else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
 
     aviso(2, "Grabando la voz")
     if not (os.path.exists(f"{carpeta}/voz.mp3") and os.path.exists(f"{carpeta}/palabras.json")):
-        voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json")
+        voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json", voz_id=est.get("voz"))
     v = Voz.de_archivo(f"{carpeta}/palabras.json")
 
     aviso(3, "Componiendo la música")
-    musica.componer(v.duracion + 3.2, f"{carpeta}/musica.wav", semilla=abs(hash(tema)) % 1000)
+    musica.componer(v.duracion + 3.2, f"{carpeta}/musica.wav", semilla=int(est.get("musica", abs(hash(tema)) % 1000)))
 
     aviso(4, "Animando los mapas")
     try:

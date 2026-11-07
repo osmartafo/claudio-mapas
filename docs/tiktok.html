@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conectar TikTok · FRONTERAS</title>
+<link rel="stylesheet" href="estilo.css">
+<style>
+  textarea{width:100%;min-height:150px;font:16px/1.4 monospace;padding:14px;border-radius:10px;border:1px solid #333;background:#11151b;color:var(--marfil)}
+  button{margin-top:14px;font:600 20px "Helvetica Neue",Helvetica,Arial,sans-serif;padding:14px 22px;border:0;border-radius:10px;background:var(--oro);color:#111;width:100%}
+</style>
+</head>
+<body>
+<main>
+  <div class="marca">Fronteras · naked agencia creativa</div>
+  <h1 id="titulo">Ya casi</h1>
+  <p id="texto">Copia todo lo de abajo y pégaselo al bot de Telegram.</p>
+  <textarea id="dir" readonly></textarea>
+  <button id="copiar" type="button">Copiar</button>
+  <p class="pie">Esta página solo muestra la dirección a la que TikTok te regresó. No guarda nada.</p>
+</main>
+<script>
+  const t = document.getElementById("dir");
+  t.value = location.href;
+  if (!location.search.includes("code=")) {
+    document.getElementById("titulo").textContent = "Falta el permiso";
+    document.getElementById("texto").textContent = "TikTok no mandó el código. Vuelve a tocar el enlace que te dio el bot.";
+  }
+  document.getElementById("copiar").onclick = () => {
+    const b = document.getElementById("copiar");
+    const listo = () => { b.textContent = "Copiado, pégalo en Telegram"; };
+    try { navigator.clipboard.writeText(t.value).then(listo).catch(() => { t.select(); document.execCommand("copy"); listo(); }); }
+    catch (e) { t.select(); document.execCommand("copy"); listo(); }
+  };
+</script>
+</body>
+</html>

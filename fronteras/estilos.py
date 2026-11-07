@@ -121,7 +121,7 @@ def elegir(forzar=None):
         "cerebro": toma("cerebro", list(CEREBROS), 3),
         "paleta": toma("paleta", list(PALETAS), 3),
         "grafico": toma("grafico", list(GRAFICOS), 2),
-        "look": _look(toma, rng),
+        "look": (forzar or {}).get("look") or _look(toma, rng),
         "voz": toma("voz", [v["id"] for v in voces], max(1, len(voces) - 1)),
         "musica": rng.randint(1, 10_000),
     }

@@ -10,7 +10,7 @@ from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import youtube, facebook, charla
+from . import youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
@@ -50,7 +50,8 @@ contador = {"idea": 0, "video": max(hechos, default=0)}
 
 # botones del teclado de abajo
 B_IDEAS, B_NUEVO, B_FORMATO, B_ESTADO, B_AYUDA = "💡 Ideas", "🎬 Nuevo video", "📐 Formato", "📊 Estado", "❓ Ayuda"
-TECLADO = ReplyKeyboardMarkup([[B_IDEAS, B_NUEVO], [B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
+B_ESTILO, B_PILOTO = "🎨 Estilo y narrador", "🤖 Piloto automático"
+TECLADO = ReplyKeyboardMarkup([[B_IDEAS, B_NUEVO], [B_ESTILO, B_PILOTO], [B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
                               input_field_placeholder="Escríbeme o mándame un audio…")
 
 PASOS = ["Guion investigado y verificado", "Voz grabada", "Música original", "Mapas animados"]
@@ -118,11 +119,210 @@ def botones_video(n):
     if facebook.configurado():
         filas.append([Boton("🚀 Publicar en Facebook e Instagram", callback_data=f"meta:{n}")])
         filas.append([Boton("📘 Solo Facebook", callback_data=f"fb:{n}"), Boton("📸 Solo Instagram", callback_data=f"ig:{n}")])
+    redes = []
     if youtube.configurado():
-        filas.append([Boton("▶️ Subir a YouTube", callback_data=f"yt:{n}")])
+        redes.append(Boton("▶️ Subir a YouTube", callback_data=f"yt:{n}"))
+    if tiktok.configurado():
+        redes.append(Boton("🎵 Subir a TikTok", callback_data=f"tt:{n}"))
+    if redes:
+        filas.append(redes)
     filas.append([Boton("📋 Texto para YouTube", callback_data=f"txt:{n}"), Boton("🔁 Otra versión", callback_data=f"otra:{n}")])
+    filas.append([Boton("🎨 Mismo video, otro look", callback_data=f"look:{n}")])
     filas.append([Boton("💡 Más ideas", callback_data="mas")])
     return Botones(filas)
+
+
+# ---------------- estilo y narrador ----------------
+ICONOS_LOOK = {"satelite": "🛰️", "noche": "🌙", "papel": "📜", "acido": "🟢", "mesa": "✂️", "riso": "🟠", "muro": "🧱", "collage": "🟥"}
+ICONOS_CEREBRO = {"documentalista": "🎞️", "cronista": "🌮", "detective": "🔎", "profesor": "🧑‍🏫", "epico": "⚔️", "datos": "📊"}
+
+
+def _nombre_look(k):
+    return f"{ICONOS_LOOK.get(k, '🎨')} {looks.LOOKS[k].get('nombre', k)}" if k in looks.LOOKS else "🎲 Automático"
+
+
+def _nombre_cerebro(k):
+    return f"{ICONOS_CEREBRO.get(k, '🧠')} {estilos.CEREBROS[k]['nombre']}" if k in estilos.CEREBROS else "🎲 Automático"
+
+
+def _nombre_voz(k):
+    return next((f"🎙️ {v['nombre']}" for v in estilos._voces() if v["id"] == k), "🎲 Automática")
+
+
+def texto_estilo(chat):
+    p = ajustes.estilo(chat)
+    return ("<b>🎨 Estilo y narrador</b>\n<i>Lo que elijas se usa en los siguientes videos. En Automático cambio en cada video "
+            "para que el canal no se vea repetido.</i>\n\n"
+            f"🖼️ Look  <b>{e(_nombre_look(p.get('look')))}</b>\n"
+            f"🧠 Narrador  <b>{e(_nombre_cerebro(p.get('cerebro')))}</b>\n"
+            f"🎙️ Voz  <b>{e(_nombre_voz(p.get('voz')))}</b>")
+
+
+def botones_estilo(chat, seccion="look", video=None):
+    """seccion look, narrador o voz. Con video se usa para rehacer ese video con otro look sin gastar créditos."""
+    p = ajustes.estilo(chat)
+    filas, par = [], []
+
+    def agrega(texto, datos):
+        par.append(Boton(texto, callback_data=datos))
+        if len(par) == 2:
+            filas.append(list(par))
+            par.clear()
+
+    if video is not None:
+        for k in looks.LOOKS:
+            agrega(_nombre_look(k), f"rlook:{video}:{k}")
+    elif seccion == "look":
+        agrega(("✅ " if not p.get("look") else "") + "🎲 Automático", "est:look:auto")
+        for k in looks.LOOKS:
+            agrega(("✅ " if p.get("look") == k else "") + _nombre_look(k), f"est:look:{k}")
+    elif seccion == "narrador":
+        agrega(("✅ " if not p.get("cerebro") else "") + "🎲 Automático", "est:cerebro:auto")
+        for k in estilos.CEREBROS:
+            agrega(("✅ " if p.get("cerebro") == k else "") + _nombre_cerebro(k), f"est:cerebro:{k}")
+    else:
+        agrega(("✅ " if not p.get("voz") else "") + "🎲 Automática", "est:voz:auto")
+        for v in estilos._voces():
+            agrega(("✅ " if p.get("voz") == v["id"] else "") + f"🎙️ {v['nombre']}", f"est:voz:{v['id']}")
+    if par:
+        filas.append(list(par))
+    if video is None:
+        pestanas = [("🖼️ Look", "look"), ("🧠 Narrador", "narrador"), ("🎙️ Voz", "voz")]
+        filas.append([Boton(("• " if seccion == k else "") + t, callback_data=f"estsec:{k}") for t, k in pestanas])
+        filas.append([Boton("👀 Ver cómo se ve cada look", callback_data="muestras")])
+    return Botones(filas)
+
+
+async def menu_estilo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat.id
+    await update.effective_message.reply_text(texto_estilo(chat), parse_mode=ParseMode.HTML, reply_markup=botones_estilo(chat))
+
+
+# ---------------- piloto automático ----------------
+NOMBRES_DESTINO = {"fb": "📘 Facebook", "ig": "📸 Instagram", "yt": "▶️ YouTube", "tt": "🎵 TikTok"}
+
+
+def destino_listo(d):
+    return {"fb": facebook.configurado, "ig": facebook.configurado, "yt": youtube.configurado, "tt": tiktok.configurado}[d]()
+
+
+def texto_piloto():
+    p = ajustes.piloto()
+    horas = ", ".join(f"{h}:00" for h in sorted(p["horas"][:p["por_dia"]]))
+    dest = "  ".join(NOMBRES_DESTINO[d] for d, si in p["destinos"].items() if si) or "ninguno"
+    yt = "público" if p["yt_publico"] else "privado"
+    return ("<b>🤖 Piloto automático</b>\n\n"
+            f"{'🟢 <b>Encendido</b>' if p['activo'] else '⚪ <b>Apagado</b>'}\n\n"
+            f"🎬 Videos al día  <b>{p['por_dia']}</b>\n🕒 Horas de México  <b>{horas}</b>\n🚀 Publica en  {dest}\n"
+            f"▶️ YouTube en <b>{yt}</b>\n\n"
+            "<i>Yo elijo el tema sin repetir, escribo, grabo, animo y publico solo. Te mando aquí cada video con sus ligas. "
+            "Cada video gasta créditos de Claude y ElevenLabs, como si lo pidieras tú.</i>")
+
+
+def botones_piloto():
+    p = ajustes.piloto()
+    d = p["destinos"]
+    return Botones([
+        [Boton("⏸️ Apagar" if p["activo"] else "▶️ Encender", callback_data="pil:onoff")],
+        [Boton(("✅ " if p["por_dia"] == n else "") + f"{n} al día", callback_data=f"pil:n:{n}") for n in (1, 2, 3)],
+        [Boton(("✅ " if d.get(k) else "⬜ ") + NOMBRES_DESTINO[k], callback_data=f"pil:d:{k}") for k in ("fb", "ig")],
+        [Boton(("✅ " if d.get(k) else "⬜ ") + NOMBRES_DESTINO[k], callback_data=f"pil:d:{k}") for k in ("yt", "tt")],
+        [Boton("▶️ Pedir YouTube público" if not p["yt_publico"] else "▶️ Dejar YouTube en privado", callback_data="pil:ytpub")],
+        [Boton("🎬 Hacer uno ahorita", callback_data="pil:ya")],
+    ])
+
+
+async def menu_piloto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.effective_message.reply_text(texto_piloto(), parse_mode=ParseMode.HTML, reply_markup=botones_piloto())
+
+
+async def publicar_en(destinos, video, texto, yt_publico=False):
+    """Publica en los destinos y regresa (líneas de texto, botones de ligas)."""
+    lineas, ligas = [], []
+    for d in destinos:
+        nombre = NOMBRES_DESTINO[d]
+        try:
+            if d == "fb":
+                liga = await asyncio.to_thread(facebook.publicar_reel, video, texto)
+            elif d == "ig":
+                liga = await asyncio.to_thread(facebook.publicar_instagram, video, texto)
+            elif d == "tt":
+                liga = await asyncio.to_thread(tiktok.subir, video, texto)
+            else:
+                liga = await asyncio.to_thread(youtube.subir, video, texto, "public" if yt_publico else None)
+            lineas.append(f'✅ {nombre}\n<a href="{e(liga)}">{e(liga)}</a>')
+            ligas.append((f"Ver en {nombre}", liga))
+        except Exception as err:
+            logging.exception(f"publicar {d}")
+            lineas.append(f"❌ {nombre}\n<code>{e(str(err)[:300])}</code>")
+    return lineas, ligas
+
+
+async def piloto_ciclo(app: Application):
+    """Revisa cada minuto si toca producir. Las horas son de la Ciudad de México."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    await asyncio.sleep(60)
+    while True:
+        try:
+            p = ajustes.piloto()
+            ahora = datetime.now(ZoneInfo("America/Mexico_City"))
+            clave = ahora.strftime("%Y-%m-%d ") + str(ahora.hour)
+            if (p["activo"] and p["chat"] and ahora.hour in p["horas"][:p["por_dia"]]
+                    and clave not in p["ultimo"] and not cola.locked()):
+                ajustes.fijar_piloto(ultimo=dict(list(p["ultimo"].items())[-20:], **{clave: "hecho"}))
+                await piloto_uno(app, p["chat"])
+        except Exception:
+            logging.exception("piloto")
+        await asyncio.sleep(60)
+
+
+async def piloto_uno(app: Application, chat):
+    """Un video completo sin intervención: tema nuevo, producción y publicación."""
+    p = ajustes.piloto()
+    hechos_antes = ajustes.temas_hechos()
+    pedido = ("Dame 8 ideas nuevas de temas para el canal, variadas en región y época. No repitas ninguno de estos: "
+              + "; ".join(hechos_antes[-60:]))
+    _, _, ideas = await asyncio.to_thread(charla.responder, f"piloto-{time.time()}", pedido)
+    tema = next((i for i in ideas if i not in hechos_antes), None)
+    if not tema:
+        await app.bot.send_message(chat, "🤖 El piloto no encontró un tema nuevo esta vez. Lo intento en la siguiente hora programada.")
+        return
+    ajustes.anotar_tema(tema)
+    aviso = await app.bot.send_message(chat, f"🤖 <b>Piloto automático</b>\nProduciendo <b>{e(tema)}</b>…", parse_mode=ParseMode.HTML)
+    async with cola:
+        estado["ahora"], estado["inicio"] = tema, time.time()
+        monitor.estado_bot["ahora"] = tema
+        try:
+            video, texto = await asyncio.to_thread(hacer_video, tema, False, lambda *a: None, True, ajustes.estilo(chat))
+        except Exception as err:
+            logging.exception("piloto video")
+            await aviso.edit_text(f"🤖 <b>{e(tema)}</b>\n\n{explica(err)}", parse_mode=ParseMode.HTML)
+            return
+        finally:
+            estado["ahora"] = None
+            monitor.estado_bot["ahora"] = None
+            monitor.estado_bot["ahora"] = None
+    contador["video"] += 1
+    n = contador["video"]
+    hechos[n] = (video, texto, tema, False)
+    _guardar_hechos()
+    destinos = [d for d in ("fb", "ig", "yt", "tt") if p["destinos"].get(d) and destino_listo(d)]
+    await aviso.edit_text(f"🤖 <b>Piloto automático</b>\n<b>{e(tema)}</b> listo, publicando…", parse_mode=ParseMode.HTML)
+    lineas, ligas = await publicar_en(destinos, video, texto, p["yt_publico"])
+    titulo = texto.partition("\n")[0]
+    envio = await asyncio.to_thread(copia_telegram, video)
+    with open(envio, "rb") as f:
+        await app.bot.send_video(chat, f, caption=f"🤖 <b>{e(titulo)}</b>", parse_mode=ParseMode.HTML,
+                                 supports_streaming=True, reply_markup=botones_video(n), read_timeout=600, write_timeout=600)
+    await app.bot.send_message(chat, "📍 <b>Dónde quedó publicado</b>\n\n" +
+                               ("\n\n".join(lineas) or "No publiqué en ningún lado, revisa los destinos del piloto."),
+                               parse_mode=ParseMode.HTML, disable_web_page_preview=True,
+                               reply_markup=Botones([[Boton(t, url=u)] for t, u in ligas]) if ligas else None)
+    try:
+        await aviso.delete()
+    except Exception:
+        pass
 
 
 # ---------------- pantallas ----------------
@@ -149,6 +349,8 @@ async def ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "🎙️ <b>Notas de voz.</b> Te escucho igual que por texto\n"
         "💡 <b>Ideas.</b> Toca una y empiezo el video\n"
         "📐 <b>Formato.</b> Vertical para Shorts y Reels, horizontal para YouTube normal\n"
+        "🎨 <b>Estilo y narrador.</b> Elige look, forma de narrar y voz, o déjalo en automático\n"
+        "🤖 <b>Piloto automático.</b> Hago y publico videos solo, a las horas que elijas\n"
         "🚀 <b>Redes.</b> Al terminar cada video aparece el botón para publicarlo en Facebook e Instagram\n\n"
         "Cada video tarda unos 5 minutos. Mientras, puedes seguir platicando conmigo.",
         parse_mode=ParseMode.HTML, reply_markup=TECLADO)
@@ -217,10 +419,22 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await pedir_tema(update)
     elif t == B_FORMATO:
         await elegir_formato(update, ctx)
+    elif t == B_ESTILO:
+        await menu_estilo(update, ctx)
+    elif t == B_PILOTO:
+        await menu_piloto(update, ctx)
     elif t == B_ESTADO:
         await ver_estado(update, ctx)
     elif t == B_AYUDA:
         await ayuda(update, ctx)
+    elif tiktok.parece_respuesta(t):
+        try:
+            nombre = await asyncio.to_thread(tiktok.conectar, t)
+            await update.message.reply_text(f"✅ TikTok conectado con <b>{e(nombre)}</b>. Desde ahora cada video trae el botón 🎵 Subir a TikTok.",
+                                            parse_mode=ParseMode.HTML)
+        except Exception as err:
+            logging.exception("tiktok")
+            await update.message.reply_text(f"❌ No pude conectar TikTok\n<code>{e(str(err)[:300])}</code>", parse_mode=ParseMode.HTML)
     elif youtube.parece_respuesta(t):
         try:
             nombre = await asyncio.to_thread(youtube.conectar, t)
@@ -252,7 +466,7 @@ async def voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- producción ----------------
-async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, horizontal=False, nuevo=False):
+async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, horizontal=False, nuevo=False, forzar=None):
     msg = update.effective_message
     tema = (tema or "").strip()
     if not tema:
@@ -266,6 +480,9 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
         if estado["en_fila"]:
             estado["en_fila"] -= 1
         estado["ahora"], estado["inicio"] = tema, time.time()
+        monitor.estado_bot["ahora"] = tema
+        if forzar is None:
+            forzar = ajustes.estilo(update.effective_chat.id)
         tarjeta = await msg.reply_text(tarjeta_progreso(tema, 1, 0, horizontal), parse_mode=ParseMode.HTML)
         loop = asyncio.get_running_loop()
         ultimo = {"t": 0.0, "texto": ""}
@@ -278,7 +495,8 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
             asyncio.run_coroutine_threadsafe(tarjeta.edit_text(nuevo, parse_mode=ParseMode.HTML), loop)
 
         try:
-            video, texto = await asyncio.to_thread(hacer_video, tema, horizontal, aviso, nuevo)
+            video, texto = await asyncio.to_thread(hacer_video, tema, horizontal, aviso, nuevo, forzar)
+            ajustes.anotar_tema(tema)
             contador["video"] += 1
             n = contador["video"]
             hechos[n] = (video, texto, tema, horizontal)
@@ -376,6 +594,61 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.answer("Listo")
         nombre = "📱 Vertical 9:16" if valor == "vertical" else "🖥️ Horizontal 16:9"
         await q.edit_message_text(f"📐 Los siguientes videos salen en <b>{nombre}</b>", parse_mode=ParseMode.HTML)
+    elif accion == "est":
+        clave, _, val = valor.partition(":")
+        ajustes.fijar_estilo(chat, clave, val)
+        await q.answer("Listo")
+        seccion = {"look": "look", "cerebro": "narrador", "voz": "voz"}.get(clave, "look")
+        await q.edit_message_text(texto_estilo(chat), parse_mode=ParseMode.HTML, reply_markup=botones_estilo(chat, seccion))
+    elif accion == "estsec":
+        await q.answer()
+        await q.edit_message_reply_markup(reply_markup=botones_estilo(chat, valor))
+    elif accion == "muestras":
+        await q.answer("👀")
+        ruta = f"{RAIZ}/assets/bot/looks.jpg"
+        if os.path.exists(ruta):
+            with open(ruta, "rb") as f:
+                await q.message.reply_photo(f, caption="Así se ve cada look con la misma escena, en el orden de los botones.")
+    elif accion == "look":
+        await q.answer()
+        n = int(valor)
+        if n not in hechos:
+            await q.message.reply_text("🔄 Ese video es de antes de una actualización. Pídelo de nuevo.")
+            return
+        await q.message.reply_text("🎨 <b>¿Con qué look lo rehago?</b>\n<i>Uso el mismo guion y la misma voz, así que no gasta créditos.</i>",
+                                   parse_mode=ParseMode.HTML, reply_markup=botones_estilo(chat, video=n))
+    elif accion == "rlook":
+        n, _, k = valor.partition(":")
+        n = int(n)
+        await q.answer("🎨 Va")
+        if n in hechos and k in looks.LOOKS:
+            _, _, tema, horizontal = hechos[n]
+            forzar = dict(ajustes.estilo(chat), look=k)
+            asyncio.create_task(producir(update, ctx, tema, horizontal, nuevo=False, forzar=forzar))
+    elif accion == "pil":
+        p = ajustes.piloto()
+        partes = valor.split(":")
+        if partes[0] == "onoff":
+            p = ajustes.fijar_piloto(activo=not p["activo"], chat=chat)
+            await q.answer("🟢 Piloto encendido" if p["activo"] else "⚪ Piloto apagado")
+        elif partes[0] == "n":
+            ajustes.fijar_piloto(por_dia=int(partes[1]), chat=chat)
+            await q.answer("Listo")
+        elif partes[0] == "d":
+            ajustes.fijar_piloto(destinos=dict(p["destinos"], **{partes[1]: not p["destinos"].get(partes[1])}), chat=chat)
+            await q.answer("Listo")
+        elif partes[0] == "ytpub":
+            ajustes.fijar_piloto(yt_publico=not p["yt_publico"], chat=chat)
+            await q.answer("Listo")
+        elif partes[0] == "ya":
+            ajustes.fijar_piloto(chat=chat)
+            await q.answer("🎬 Empiezo uno")
+            asyncio.create_task(piloto_uno(ctx.application, chat))
+            return
+        try:
+            await q.edit_message_text(texto_piloto(), parse_mode=ParseMode.HTML, reply_markup=botones_piloto())
+        except Exception:
+            pass
     elif accion == "txt":
         await q.answer()
         n = int(valor)
@@ -410,29 +683,20 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception as err:
             logging.exception("yt")
             await aviso.edit_text(f"❌ ▶️ YouTube\n<code>{e(str(err)[:300])}</code>", parse_mode=ParseMode.HTML)
-    elif accion in ("fb", "ig", "meta"):
+    elif accion in ("fb", "ig", "meta", "tt"):
         await q.answer("🚀 Publicando…")
         n = int(valor)
         if n not in hechos:
             await q.message.reply_text("🔄 Ese video es de antes de una actualización. Pídelo de nuevo.")
             return
         video, texto, _, _ = hechos[n]
-        destinos = {"fb": ["fb"], "ig": ["ig"], "meta": ["fb", "ig"]}[accion]
-        aviso = await q.message.reply_text("🚀 Publicando…")
-        lineas, ligas = [], []
-        for d in destinos:
-            nombre = "📘 Facebook" if d == "fb" else "📸 Instagram"
-            try:
-                funcion = facebook.publicar_reel if d == "fb" else facebook.publicar_instagram
-                liga = await asyncio.to_thread(funcion, video, texto)
-                lineas.append(f'✅ {nombre}\n<a href="{e(liga)}">{e(liga)}</a>')
-                ligas.append((f"Ver en {nombre}", liga))
-            except Exception as err:
-                logging.exception(d)
-                lineas.append(f"❌ {nombre}\n<code>{e(str(err)[:300])}</code>")
-            await aviso.edit_text("📍 <b>Dónde quedó publicado</b>\n\n" + "\n\n".join(lineas), parse_mode=ParseMode.HTML,
-                                  disable_web_page_preview=True,
-                                  reply_markup=Botones([[Boton(t, url=u)] for t, u in ligas]) if ligas else None)
+        destinos = {"fb": ["fb"], "ig": ["ig"], "meta": ["fb", "ig"], "tt": ["tt"]}[accion]
+        aviso = await q.message.reply_text("🚀 Publicando…" + ("\n<i>Instagram puede tardar unos minutos.</i>" if "ig" in destinos else ""),
+                                           parse_mode=ParseMode.HTML)
+        lineas, ligas = await publicar_en(destinos, video, texto)
+        await aviso.edit_text("📍 <b>Dónde quedó publicado</b>\n\n" + "\n\n".join(lineas), parse_mode=ParseMode.HTML,
+                              disable_web_page_preview=True,
+                              reply_markup=Botones([[Boton(t, url=u)] for t, u in ligas]) if ligas else None)
     else:
         await q.answer()
 
@@ -454,14 +718,18 @@ async def cmd_youtube(update, ctx):
 
 
 async def al_arrancar(app: Application):
+    app.create_task(piloto_ciclo(app))
     await app.bot.set_my_commands([
         BotCommand("start", "Menú principal"),
         BotCommand("ideas", "Ideas de temas"),
         BotCommand("video", "Hacer un video sobre un tema"),
         BotCommand("horizontal", "Video 16:9 para YouTube"),
         BotCommand("formato", "Vertical u horizontal"),
+        BotCommand("estilo", "Elegir look, narrador y voz"),
+        BotCommand("piloto", "Piloto automático"),
         BotCommand("estado", "Qué estoy haciendo"),
         BotCommand("youtube", "Conectar el canal de YouTube"),
+        BotCommand("tiktok", "Conectar TikTok"),
         BotCommand("ayuda", "Cómo usarme"),
     ])
     try:
@@ -472,7 +740,31 @@ async def al_arrancar(app: Application):
         logging.exception("descripción")
 
 
+async def cmd_tiktok(update, ctx):
+    if not autorizado(update):
+        return
+    if not tiktok.tiene_cliente():
+        await update.message.reply_text("Falta poner TIKTOK_CLIENT_KEY y TIKTOK_CLIENT_SECRET en Railway.")
+        return
+    await update.message.reply_text(
+        "🎵 <b>Conectar TikTok</b>\n\n1. Abre el enlace y entra con la cuenta de TikTok del canal\n2. Acepta los permisos\n"
+        "3. Vas a llegar a una página de FRONTERAS. Toca Copiar y pégame aquí lo que copiaste\n\n"
+        f'<a href="{e(tiktok.enlace_conexion())}">👉 Conectar mi TikTok</a>',
+        parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+
+async def cmd_estilo(update, ctx):
+    if autorizado(update):
+        await menu_estilo(update, ctx)
+
+
+async def cmd_piloto(update, ctx):
+    if autorizado(update):
+        await menu_piloto(update, ctx)
+
+
 def main():
+    monitor.arrancar()
     # tiempos largos: subir un video de 30 MB o bajar un audio tarda más que los 5 s de fábrica
     app = (Application.builder().token(os.environ["TELEGRAM_TOKEN"]).post_init(al_arrancar)
            .connect_timeout(30).read_timeout(120).write_timeout(300).pool_timeout(60)
@@ -486,6 +778,9 @@ def main():
     app.add_handler(CommandHandler("formato", cmd_formato))
     app.add_handler(CommandHandler("estado", ver_estado))
     app.add_handler(CommandHandler("youtube", cmd_youtube))
+    app.add_handler(CommandHandler("estilo", cmd_estilo))
+    app.add_handler(CommandHandler("tiktok", cmd_tiktok))
+    app.add_handler(CommandHandler("piloto", cmd_piloto))
     app.add_handler(CallbackQueryHandler(botones))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_libre))

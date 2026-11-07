@@ -32,8 +32,10 @@ def _previa(tema):
     return os.path.join(SALIDA, sorted(cand)[-1]) if cand else None
 
 
-def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False):
-    """nuevo=False reusa el guion y la voz de un intento anterior del mismo tema, para no pagar dos veces."""
+def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False, forzar=None):
+    """nuevo=False reusa el guion y la voz de un intento anterior del mismo tema, para no pagar dos veces.
+    forzar fija partes del estilo, ej. {"look": "satelite", "cerebro": "detective", "voz": "..."}."""
+    forzar = {k: v for k, v in (forzar or {}).items() if v}
     previa = None if nuevo else _previa(tema)
     carpeta = previa or os.path.join(SALIDA, nombre_carpeta(tema))
     os.makedirs(carpeta, exist_ok=True)
@@ -41,9 +43,11 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False)
     aviso(1, "Investigando el tema y escribiendo el guion")
     if previa:
         spec = json.load(open(f"{carpeta}/spec.json"))
-        est = spec.get("estilo") or estilos.elegir()
+        est = spec.get("estilo") or estilos.elegir(forzar)
+        if forzar.get("look"):  # el look es solo visual: se puede cambiar sin volver a escribir ni grabar
+            est = dict(est, look=forzar["look"])
     else:
-        est = estilos.elegir()
+        est = estilos.elegir(forzar)
         aviso(1, f"Escribiendo con estilo {estilos.describir(est)}")
         spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est))
     spec["estilo"] = est

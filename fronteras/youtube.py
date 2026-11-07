@@ -89,7 +89,7 @@ def canal(token=None):
     return items[0]["snippet"]["title"] if items else "tu canal"
 
 
-def subir(ruta_video, texto):
+def subir(ruta_video, texto, privacidad=None):
     titulo, _, resto = texto.partition("\n")
     titulo = titulo.strip()[:90]
     if "#shorts" not in titulo.lower():
@@ -97,7 +97,7 @@ def subir(ruta_video, texto):
     cuerpo = {
         "snippet": {"title": titulo, "description": resto.strip()[:4900], "categoryId": "27",
                     "defaultLanguage": "es", "defaultAudioLanguage": "es"},
-        "status": {"privacyStatus": os.environ.get("YOUTUBE_PRIVACIDAD", "private"), "selfDeclaredMadeForKids": False},
+        "status": {"privacyStatus": privacidad or os.environ.get("YOUTUBE_PRIVACIDAD", "private"), "selfDeclaredMadeForKids": False},
     }
     token = _acceso()
     tam = os.path.getsize(ruta_video)

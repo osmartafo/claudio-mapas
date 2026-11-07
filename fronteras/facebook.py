@@ -220,6 +220,18 @@ def publicar_instagram(ruta_video, descripcion):
 
 def _publicar_instagram(ig, token, ruta_video, descripcion, usar_facebook=True):
     base = {"media_type": "REELS", "caption": descripcion[:2200], "share_to_feed": "true", "access_token": token}
+    # camino 0 (el recomendado por Meta): Instagram descarga el video desde una dirección pública del propio bot
+    try:
+        from . import monitor
+        url_propia = monitor.compartir_video(ruta_video)
+    except Exception:
+        url_propia = None
+    if url_propia:
+        try:
+            d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, video_url=url_propia), timeout=60))
+            return _esperar_y_publicar(ig, d["id"], token)
+        except Exception as err:
+            print("Instagram desde la dirección del bot falló:", err)
     # camino 1: subida directa del archivo
     try:
         d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, upload_type="resumable"), timeout=60))

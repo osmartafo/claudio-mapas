@@ -15,6 +15,21 @@ ARCHIVO = os.path.join(CARPETA, "errores.json")
 INICIO = time.time()
 VERSION = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:7]
 estado_bot = {"ahora": None}
+_publicos = {}  # nombre aleatorio -> (ruta, vence): videos que Instagram descarga por su cuenta
+
+
+def compartir_video(ruta, minutos=120):
+    """Deja el video disponible unas horas en https://DOMINIO/v/<nombre aleatorio>.mp4 para que Instagram lo descargue."""
+    import secrets
+    dominio = os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("FRONTERAS_DOMINIO")
+    if not dominio:
+        return None
+    nombre = secrets.token_urlsafe(24)
+    ahora = time.time()
+    for k in [k for k, (_, v) in _publicos.items() if v < ahora]:
+        _publicos.pop(k, None)
+    _publicos[nombre] = (ruta, ahora + minutos * 60)
+    return f"https://{dominio}/v/{nombre}.mp4"
 _candado = threading.Lock()
 
 _PATRONES = [
@@ -79,8 +94,47 @@ class _Web(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(cuerpo)
 
+    def _video(self, nombre):
+        dato = _publicos.get(nombre)
+        if not dato or dato[1] < time.time() or not os.path.exists(dato[0]):
+            return self._json({"error": "no existe"}, 404)
+        tam = os.path.getsize(dato[0])
+        ini, fin = 0, tam - 1
+        rango = self.headers.get("Range", "")
+        if rango.startswith("bytes="):
+            a, _, b = rango[6:].partition("-")
+            ini = int(a or 0)
+            fin = min(int(b) if b else tam - 1, tam - 1)
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {ini}-{fin}/{tam}")
+        else:
+            self.send_response(200)
+        self.send_header("Content-Type", "video/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(fin - ini + 1))
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with open(dato[0], "rb") as f:
+            f.seek(ini)
+            falta = fin - ini + 1
+            while falta > 0:
+                bloque = f.read(min(1 << 20, falta))
+                if not bloque:
+                    break
+                self.wfile.write(bloque)
+                falta -= len(bloque)
+
+    def do_HEAD(self):
+        ruta = self.path.split("?")[0]
+        if ruta.startswith("/v/") and ruta.endswith(".mp4"):
+            return self._video(ruta[3:-4])
+        self.send_response(404); self.end_headers()
+
     def do_GET(self):
         ruta = self.path.split("?")[0].rstrip("/")
+        if ruta.startswith("/v/") and ruta.endswith(".mp4"):
+            return self._video(ruta[3:-4])
         if ruta in ("", "/salud"):
             self._json({"vivo": True, "version": VERSION, "minutos_encendido": int((time.time() - INICIO) / 60),
                         "produciendo": estado_bot.get("ahora"), "errores_guardados": len(_leer())})

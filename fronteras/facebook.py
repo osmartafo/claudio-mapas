@@ -131,40 +131,73 @@ def _esperar_y_publicar(ig, contenedor, token):
     return link.get("permalink") or "https://www.instagram.com/"
 
 
-def _copia_para_instagram(ruta_video):
-    """Instagram es muy exigente con el formato. Se hace una copia con la receta más segura de sus especificaciones:
-    H.264 perfil main, 30 fps constantes, GOP cerrado de 2 s, sin B frames, AAC estéreo 48 kHz, moov al inicio."""
+RECETAS_IG = [
+    # 1080x1920 H.264 main, 30 fps, GOP cerrado, sin B frames, AAC 48 kHz
+    ["-vf", "scale=1080:1920,setsar=1", "-c:v", "libx264", "-profile:v", "main", "-level:v", "4.1", "-pix_fmt", "yuv420p",
+     "-r", "30", "-vsync", "cfr", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0", "-bf", "0",
+     "-preset", "veryfast", "-crf", "21", "-maxrate", "8M", "-bufsize", "16M",
+     "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2"],
+    # más ligera: 720x1280, perfil high 4.0, bitrate fijo bajo, audio 44.1 kHz
+    ["-vf", "scale=720:1280,setsar=1", "-c:v", "libx264", "-profile:v", "high", "-level:v", "4.0", "-pix_fmt", "yuv420p",
+     "-r", "30", "-vsync", "cfr", "-g", "30", "-preset", "medium", "-b:v", "3500k", "-maxrate", "4M", "-bufsize", "8M",
+     "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"],
+]
+
+
+def _duracion(ruta):
     import subprocess
-    salida = os.path.splitext(ruta_video)[0] + "_ig.mp4"
+    try:
+        return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ruta],
+                                    capture_output=True, text=True).stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def _copia_para_instagram(ruta_video, receta=0, acelerar=1.0):
+    """Instagram es muy exigente con el formato. Cada receta es una copia distinta que cumple sus especificaciones;
+    si Instagram rechaza una, se intenta la siguiente. acelerar > 1 acorta el video para que quepa en 90 s."""
+    import subprocess
+    salida = os.path.splitext(ruta_video)[0] + f"_ig{receta}{'r' if acelerar > 1 else ''}.mp4"
     if os.path.exists(salida) and os.path.getmtime(salida) >= os.path.getmtime(ruta_video):
         return salida
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta_video,
-                    "-c:v", "libx264", "-profile:v", "main", "-level:v", "4.1", "-pix_fmt", "yuv420p",
-                    "-r", "30", "-vsync", "cfr", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0", "-bf", "0",
-                    "-preset", "veryfast", "-crf", "21", "-maxrate", "8M", "-bufsize", "16M",
-                    "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                    "-movflags", "+faststart", salida], check=True)
+    args = list(RECETAS_IG[receta])
+    if acelerar > 1:
+        vf = args.index("-vf") + 1
+        args[vf] = f"setpts=PTS/{acelerar:.4f}," + args[vf]
+        args = args + ["-af", f"atempo={acelerar:.4f}"]
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", ruta_video, "-map_metadata", "-1"] + args +
+                   ["-movflags", "+faststart", salida], check=True)
     return salida
 
 
 def publicar_instagram(ruta_video, descripcion):
+    """Prueba varias copias del video, porque Instagram a veces rechaza una sin decir por qué (error 2207076)."""
     ig, token = instagram_id(), _token()
-    try:
-        ruta_video = _copia_para_instagram(ruta_video)
-    except Exception as err:
-        print("No pude preparar la copia para Instagram:", err)
+    dur = _duracion(ruta_video)
+    intentos = [(0, 1.0), (1, 1.0)]
+    if dur > 89.5:  # algunas cuentas solo aceptan Reels de hasta 90 s por la API
+        intentos.append((1, dur / 89.0))
     ultimo = None
-    for intento in range(3):  # Meta a veces falla sin razón, se reintenta con espera creciente
+    for n, (receta, acel) in enumerate(intentos):
         try:
-            return _publicar_instagram(ig, token, ruta_video, descripcion)
+            copia = _copia_para_instagram(ruta_video, receta, acel)
         except Exception as err:
-            ultimo = err
-            print(f"Instagram intento {intento + 1} falló:", err)
-            time.sleep(20 * (intento + 1))
+            print("No pude preparar la copia para Instagram:", err)
+            copia = ruta_video
+        for intento in range(2):
+            try:
+                return _publicar_instagram(ig, token, copia, descripcion, usar_facebook=(n == len(intentos) - 1))
+            except Exception as err:
+                ultimo = err
+                print(f"Instagram receta {receta} intento {intento + 1} falló:", err)
+                if "procesar" not in str(err):  # error de red o de Meta, vale la pena repetir igual
+                    time.sleep(20 * (intento + 1))
+                    continue
+                break  # Instagram no aceptó esta copia, se pasa a la siguiente receta
     raise ultimo
 
 
-def _publicar_instagram(ig, token, ruta_video, descripcion):
+def _publicar_instagram(ig, token, ruta_video, descripcion, usar_facebook=True):
     base = {"media_type": "REELS", "caption": descripcion[:2200], "share_to_feed": "true", "access_token": token}
     # camino 1: subida directa del archivo
     try:
@@ -176,9 +209,13 @@ def _publicar_instagram(ig, token, ruta_video, descripcion):
                                                 "file_size": str(len(datos))}, data=datos, timeout=600))
         return _esperar_y_publicar(ig, contenedor, token)
     except Exception as err:
-        print("Instagram directo falló, uso la copia de Facebook:", err)
+        print("Instagram directo falló:", err)
+        if not usar_facebook:
+            raise
     # camino 2: Instagram toma el video desde la copia alojada en Facebook
     url = _url_en_facebook(ruta_video)
     print("Instagram toma el video desde Facebook")
     d = _revisa(requests.post(f"{GRAPH}/{ig}/media", data=dict(base, video_url=url), timeout=60))
     return _esperar_y_publicar(ig, d["id"], token)
+
+

@@ -331,9 +331,12 @@ async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              "Soy tu fábrica de documentales cortos. Platica conmigo por texto o 🎙️ nota de voz.\n\n"
              "💡 Te propongo ideas y las eliges con un toque\n"
              "🎬 Investigo, escribo, grabo la voz y animo los mapas\n"
-             "📘 Lo publicas en Facebook con un botón\n\n"
+             "🚀 Lo publico en Facebook, Instagram, YouTube y TikTok\n"
+             "🎨 Eliges look, narrador y voz con botones\n"
+             "🤖 Con el piloto automático hago y publico videos solo\n\n"
              f"Tu número de usuario es <code>{update.effective_user.id}</code>")
-    menu = Botones([[Boton("💡 Dame ideas", callback_data="mas"), Boton("✍️ Tengo un tema", callback_data="propio")]])
+    menu = Botones([[Boton("💡 Dame ideas", callback_data="mas"), Boton("✍️ Tengo un tema", callback_data="propio")],
+                    [Boton("🎨 Estilo y narrador", callback_data="estsec:look"), Boton("🤖 Piloto automático", callback_data="pilmenu")]])
     try:
         with open(BANNER, "rb") as f:
             await update.message.reply_photo(f, caption=texto, parse_mode=ParseMode.HTML, reply_markup=TECLADO)
@@ -419,9 +422,9 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await pedir_tema(update)
     elif t == B_FORMATO:
         await elegir_formato(update, ctx)
-    elif t == B_ESTILO:
+    elif t == B_ESTILO or (len(t) < 60 and any(k in t.lower() for k in ("estilo", "look", "narrador", "voces", "la voz"))):
         await menu_estilo(update, ctx)
-    elif t == B_PILOTO:
+    elif t == B_PILOTO or (len(t) < 60 and "piloto" in t.lower()):
         await menu_piloto(update, ctx)
     elif t == B_ESTADO:
         await ver_estado(update, ctx)
@@ -602,7 +605,13 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(texto_estilo(chat), parse_mode=ParseMode.HTML, reply_markup=botones_estilo(chat, seccion))
     elif accion == "estsec":
         await q.answer()
-        await q.edit_message_reply_markup(reply_markup=botones_estilo(chat, valor))
+        if "Estilo y narrador" in (q.message.text or ""):
+            await q.edit_message_reply_markup(reply_markup=botones_estilo(chat, valor))
+        else:
+            await menu_estilo(update, ctx)
+    elif accion == "pilmenu":
+        await q.answer()
+        await menu_piloto(update, ctx)
     elif accion == "muestras":
         await q.answer("👀")
         ruta = f"{RAIZ}/assets/bot/looks.jpg"
@@ -717,8 +726,38 @@ async def cmd_youtube(update, ctx):
         parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
+async def avisar_actualizacion(app: Application):
+    """Tras cada actualización manda el teclado nuevo (Telegram no lo cambia solo) y enciende el piloto la primera vez."""
+    version = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:7] or "local"
+    previo = ajustes._leer()
+    if not PERMITIDOS:
+        return
+    dueno = sorted(PERMITIDOS)[0]
+    if "piloto" not in previo:  # primera vez: el dueño pidió que los videos se suban solos
+        ajustes.fijar_piloto(activo=True, chat=dueno)
+    if previo.get("version_avisada") == version:
+        return
+    d = ajustes._leer(); d["version_avisada"] = version; ajustes._escribir(d)
+    p = ajustes.piloto()
+    estado_piloto = "🟢 encendido" if p["activo"] else "⚪ apagado"
+    for chat in PERMITIDOS:
+        try:
+            await app.bot.send_message(
+                chat, "✅ <b>Bot actualizado</b>\n\nYa tienes abajo los botones nuevos\n"
+                      f"🎨 <b>Estilo y narrador</b>  eliges look, forma de narrar y voz\n"
+                      f"🤖 <b>Piloto automático</b>  {estado_piloto}, publica solo {p['por_dia']} video al día\n\n"
+                      "Si no ves los botones, toca el cuadrito de cuatro puntos junto al micrófono.",
+                parse_mode=ParseMode.HTML, reply_markup=TECLADO)
+        except Exception:
+            logging.exception("aviso de actualización")
+
+
 async def al_arrancar(app: Application):
     app.create_task(piloto_ciclo(app))
+    try:
+        await avisar_actualizacion(app)
+    except Exception:
+        logging.exception("arranque")
     await app.bot.set_my_commands([
         BotCommand("start", "Menú principal"),
         BotCommand("ideas", "Ideas de temas"),

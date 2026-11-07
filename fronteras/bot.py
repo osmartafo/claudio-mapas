@@ -199,6 +199,7 @@ async def menu_estilo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- piloto automático ----------------
+YT_MAX_DIA = int(os.environ.get("YOUTUBE_MAX_DIA", "6"))  # la cuota gratis de la API alcanza para unas 6 subidas al día
 NOMBRES_DESTINO = {"fb": "📘 Facebook", "ig": "📸 Instagram", "yt": "▶️ YouTube", "tt": "🎵 TikTok"}
 
 
@@ -208,7 +209,7 @@ def destino_listo(d):
 
 def texto_piloto():
     p = ajustes.piloto()
-    horas = ", ".join(f"{h}:00" for h in sorted(p["horas"][:p["por_dia"]]))
+    horas = ", ".join(f"{m // 60}:{m % 60:02d}" for m in ajustes.horario(p["por_dia"]))
     dest = "  ".join(NOMBRES_DESTINO[d] for d, si in p["destinos"].items() if si) or "ninguno"
     yt = "público" if p["yt_publico"] else "privado"
     return ("<b>🤖 Piloto automático</b>\n\n"
@@ -216,7 +217,8 @@ def texto_piloto():
             f"🎬 Videos al día  <b>{p['por_dia']}</b>\n🕒 Horas de México  <b>{horas}</b>\n🚀 Publica en  {dest}\n"
             f"▶️ YouTube en <b>{yt}</b>\n\n"
             "<i>Yo elijo el tema sin repetir, escribo, grabo, animo y publico solo. Te mando aquí cada video con sus ligas. "
-            "Cada video gasta créditos de Claude y ElevenLabs, como si lo pidieras tú.</i>")
+            "Cada video gasta créditos de Claude y ElevenLabs, como si lo pidieras tú. "
+            f"YouTube deja subir máximo {YT_MAX_DIA} al día por esta vía; los demás van solo a las otras redes.</i>")
 
 
 def botones_piloto():
@@ -224,7 +226,8 @@ def botones_piloto():
     d = p["destinos"]
     return Botones([
         [Boton("⏸️ Apagar" if p["activo"] else "▶️ Encender", callback_data="pil:onoff")],
-        [Boton(("✅ " if p["por_dia"] == n else "") + f"{n} al día", callback_data=f"pil:n:{n}") for n in (1, 2, 3)],
+        [Boton(("✅ " if p["por_dia"] == n else "") + f"{n}", callback_data=f"pil:n:{n}") for n in ajustes.OPCIONES_POR_DIA[:4]],
+        [Boton(("✅ " if p["por_dia"] == n else "") + f"{n} al día", callback_data=f"pil:n:{n}") for n in ajustes.OPCIONES_POR_DIA[4:]],
         [Boton(("✅ " if d.get(k) else "⬜ ") + NOMBRES_DESTINO[k], callback_data=f"pil:d:{k}") for k in ("fb", "ig")],
         [Boton(("✅ " if d.get(k) else "⬜ ") + NOMBRES_DESTINO[k], callback_data=f"pil:d:{k}") for k in ("yt", "tt")],
         [Boton("▶️ Pedir YouTube público" if not p["yt_publico"] else "▶️ Dejar YouTube en privado", callback_data="pil:ytpub")],
@@ -267,11 +270,14 @@ async def piloto_ciclo(app: Application):
         try:
             p = ajustes.piloto()
             ahora = datetime.now(ZoneInfo("America/Mexico_City"))
-            clave = ahora.strftime("%Y-%m-%d ") + str(ahora.hour)
-            if (p["activo"] and p["chat"] and ahora.hour in p["horas"][:p["por_dia"]]
-                    and clave not in p["ultimo"] and not cola.locked()):
-                ajustes.fijar_piloto(ultimo=dict(list(p["ultimo"].items())[-20:], **{clave: "hecho"}))
-                await piloto_uno(app, p["chat"])
+            minuto = ahora.hour * 60 + ahora.minute
+            # el turno más reciente que ya llegó (con hasta 90 minutos de tolerancia si había otro video en curso)
+            vencidos = [m for m in ajustes.horario(p["por_dia"]) if 0 <= minuto - m <= 90]
+            if p["activo"] and p["chat"] and vencidos and not cola.locked():
+                clave = ahora.strftime("%Y-%m-%d ") + f"{vencidos[-1] // 60}:{vencidos[-1] % 60:02d}"
+                if clave not in p["ultimo"]:
+                    ajustes.fijar_piloto(ultimo=dict(list(p["ultimo"].items())[-40:], **{clave: "hecho"}))
+                    await piloto_uno(app, p["chat"])
         except Exception:
             logging.exception("piloto")
         await asyncio.sleep(60)
@@ -308,6 +314,12 @@ async def piloto_uno(app: Application, chat):
     hechos[n] = (video, texto, tema, False)
     _guardar_hechos()
     destinos = [d for d in ("fb", "ig", "yt", "tt") if p["destinos"].get(d) and destino_listo(d)]
+    hoy = time.strftime("%Y-%m-%d")
+    if "yt" in destinos:
+        if ajustes.visto_hoy("yt", hoy) >= YT_MAX_DIA:
+            destinos.remove("yt")
+        else:
+            ajustes.contar_hoy("yt", hoy)
     await aviso.edit_text(f"🤖 <b>Piloto automático</b>\n<b>{e(tema)}</b> listo, publicando…", parse_mode=ParseMode.HTML)
     lineas, ligas = await publicar_en(destinos, video, texto, p["yt_publico"])
     titulo = texto.partition("\n")[0]
@@ -745,7 +757,7 @@ async def avisar_actualizacion(app: Application):
             await app.bot.send_message(
                 chat, "✅ <b>Bot actualizado</b>\n\nYa tienes abajo los botones nuevos\n"
                       f"🎨 <b>Estilo y narrador</b>  eliges look, forma de narrar y voz\n"
-                      f"🤖 <b>Piloto automático</b>  {estado_piloto}, publica solo {p['por_dia']} video al día\n\n"
+                      f"🤖 <b>Piloto automático</b>  {estado_piloto}, publica solo {p['por_dia']} al día\n\n"
                       "Si no ves los botones, toca el cuadrito de cuatro puntos junto al micrófono.",
                 parse_mode=ParseMode.HTML, reply_markup=TECLADO)
         except Exception:

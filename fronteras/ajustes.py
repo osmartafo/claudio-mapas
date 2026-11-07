@@ -80,3 +80,33 @@ def anotar_tema(tema):
             t.append(tema)
         d["temas"] = t[-300:]
         _escribir(d)
+
+
+OPCIONES_POR_DIA = (1, 2, 3, 5, 8, 10, 12)
+
+
+def horario(n):
+    """Horas del día (en minutos desde medianoche, hora de México) en que el piloto publica n videos.
+    De 1 a 3 se usan las horas fuertes; con más se reparten parejo entre las 8:00 y las 22:00."""
+    fijos = {1: [11 * 60], 2: [11 * 60, 19 * 60], 3: [11 * 60, 15 * 60, 19 * 60]}
+    if n in fijos:
+        return fijos[n]
+    ini, fin = 8 * 60, 22 * 60
+    paso = (fin - ini) / (n - 1)
+    return [int(ini + round(i * paso / 5) * 5) for i in range(n)]
+
+
+def contar_hoy(clave, fecha):
+    """Suma uno al contador del día (por ejemplo subidas a YouTube) y regresa el total."""
+    with _candado:
+        d = _leer()
+        c = d.setdefault("contadores", {})
+        llave = f"{fecha} {clave}"
+        c[llave] = c.get(llave, 0) + 1
+        d["contadores"] = dict(list(c.items())[-60:])
+        _escribir(d)
+        return c[llave]
+
+
+def visto_hoy(clave, fecha):
+    return _leer().get("contadores", {}).get(f"{fecha} {clave}", 0)

@@ -62,6 +62,8 @@ def _mosaico(lista, aviso=print):
     import requests
     s = requests.Session()
     s.headers["User-Agent"] = "fronteras-mapas/1.0"
+    if not _bajar(lista[len(lista) // 2], s)[1]:  # si la primera no baja, no hay red: no se pierde tiempo con las demás
+        raise RuntimeError("sin acceso al servidor de relieve")
     with ThreadPoolExecutor(16) as ex:
         res = dict(ex.map(lambda t: _bajar(t, s), lista))
     malas = [t for t, r in res.items() if not r]
@@ -199,6 +201,18 @@ def _color_satelite(hs, elev, caja):
     return np.clip(tierra * k + mar * (1 - k), 0, 1)
 
 
+def _color_atlas(hs, elev, caja):
+    """Colores del mapa físico de Natural Earth con el relieve nítido de las teselas encima."""
+    from scipy.ndimage import gaussian_filter
+    from . import atlas
+    alto, ancho = hs.shape
+    base = atlas.recorte(caja, ancho, alto)
+    detalle = hs - gaussian_filter(hs, 14)
+    tierra = (elev > 0).astype(np.float32)
+    k = gaussian_filter(tierra, 1.0)[..., None]
+    return np.clip(base * (1 + detalle[..., None] * 1.1 * k), 0, 1)
+
+
 def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print, modo="noche"):
     """Devuelve [(rgba uint8, caja)] listas para dibujar encima del mapa base."""
     resultado = []
@@ -213,6 +227,8 @@ def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print, modo="noche"):
             hs_eq, elev_eq = par[..., 0], par[..., 1]
             if modo == "satelite":
                 eq = _color_satelite(hs_eq, elev_eq, caja)
+            elif modo == "atlas":
+                eq = _color_atlas(hs_eq, elev_eq, caja)
             else:
                 eq = _color(hs_eq, elev_eq)
                 if base_img is not None:
@@ -226,4 +242,14 @@ def capas(camaras, K, base_img=None, W=1080, H=1920, aviso=print, modo="noche"):
             aviso(f"relieve z{z} listo ({len(lista)} teselas, {rgba.shape[1]}x{rgba.shape[0]})")
         except Exception as ex:
             aviso(f"relieve z{z} no se pudo ({ex}); queda el mapa base")
+            if modo == "atlas":  # sin internet el atlas igual tiene su propio mapa a 60 px por grado
+                try:
+                    from . import atlas
+                    ancho = int((caja[2] - caja[0]) * 60); alto = int((caja[3] - caja[1]) * 60 / K)
+                    f = min(1.0, 7000 / max(ancho, alto))
+                    eq = atlas.recorte(caja, max(8, int(ancho * f)), max(8, int(alto * f)))
+                    alfa = _difuminar_bordes(*eq.shape[:2])
+                    resultado.append((np.dstack([eq * 255, alfa * 255]).astype(np.uint8), caja))
+                except Exception as ex2:
+                    aviso(f"atlas sin detalle ({ex2})")
     return resultado

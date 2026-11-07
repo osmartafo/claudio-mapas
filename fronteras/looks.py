@@ -22,6 +22,14 @@ LOOKS = {
         "sub": "color", "mayus_titulo": False, "sombra": 1.6, "grano": 0.0,
         "zonas_vivas": True, "etiqueta_pastilla": True,
     },
+    "atlas": {
+        "nombre": "Atlas físico",
+        "NOCHE": "#5B9BC8", "MARFIL": "#FFFFFF", "ORO": "#FFD23F", "ORO_CLARO": "#FFD23F", "CARMIN": "#E8453C", "PIEDRA": "#3B4A5A",
+        "mapa": None, "base": "base_atlas.jpg", "relieve": "atlas", "ventana": "completa",
+        "f_titulo": "HelveticaNowDisplay-ExtraBold", "f_cifra": "HelveticaNowDisplay-ExtraBold", "f_sub": "HelveticaNowDisplay-ExtraBold", "f_ano": "HelveticaNowDisplay-Bold",
+        "sub": "color", "mayus_titulo": False, "sombra": 2.0, "grano": 0.0,
+        "zonas_vivas": True, "etiqueta_pastilla": True, "borde_color": "#2F3B47", "borde_alfa": 0.6, "sub_banda": "#0E1A26",
+    },
     "papel": {
         "y_titulo": 235, "y_cifra": 1300, "lineas_cifra": 1,
         "nombre": "Papel rasgado",

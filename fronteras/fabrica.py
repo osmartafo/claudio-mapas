@@ -75,7 +75,9 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     except Exception as err:
         print("Aviso sfx:", err)
         fx = None
-    video = short.render(f"{carpeta}/video.mp4", voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav", sfx_wav=fx,
+    # cada versión es un archivo propio: rehacer con otro look nunca borra las anteriores
+    salida_video = f"{carpeta}/video_{est.get('look', 'noche')}_{time.strftime('%H%M%S')}.mp4"
+    video = short.render(salida_video, voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav", sfx_wav=fx,
                          progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))

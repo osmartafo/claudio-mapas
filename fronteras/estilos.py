@@ -97,11 +97,12 @@ def _look(toma, rng):
     except Exception:
         return "noche"
     r = rng.random()
-    if r < 0.50 and "satelite" in otros:  # el look a todo color es el principal
-        return "satelite"
-    if r < 0.70:
+    color = [o for o in ("satelite", "atlas") if o in otros]
+    if r < 0.55 and color:  # los looks a todo color son los principales
+        return toma("look", color, 1)
+    if r < 0.72:
         return "noche"
-    return toma("look", [o for o in otros if o != "satelite"], 3)
+    return toma("look", [o for o in otros if o not in color], 3)
 
 
 def elegir(forzar=None):

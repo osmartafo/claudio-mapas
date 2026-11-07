@@ -133,7 +133,7 @@ def botones_video(n):
 
 
 # ---------------- estilo y narrador ----------------
-ICONOS_LOOK = {"satelite": "🛰️", "noche": "🌙", "papel": "📜", "acido": "🟢", "mesa": "✂️", "riso": "🟠", "muro": "🧱", "collage": "🟥"}
+ICONOS_LOOK = {"atlas": "🗺️", "satelite": "🛰️", "noche": "🌙", "papel": "📜", "acido": "🟢", "mesa": "✂️", "riso": "🟠", "muro": "🧱", "collage": "🟥"}
 ICONOS_CEREBRO = {"documentalista": "🎞️", "cronista": "🌮", "detective": "🔎", "profesor": "🧑‍🏫", "epico": "⚔️", "datos": "📊"}
 
 

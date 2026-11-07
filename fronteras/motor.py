@@ -417,8 +417,8 @@ class Short:
         c.save()
         c.concat(m)
         s = m.getScaleX()
-        alfa_b, grosor_b = (0.55, 2.0) if self.L.get("zonas_vivas") else (0.16, 1.6)
-        p = skia.Paint(AntiAlias=True, Color4f=col(MARFIL, alfa_b), Style=skia.Paint.kStroke_Style, StrokeWidth=grosor_b * self.graf["linea"] / s)
+        alfa_b, grosor_b = (self.L.get("borde_alfa", 0.55), 2.0) if self.L.get("zonas_vivas") else (0.16, 1.6)
+        p = skia.Paint(AntiAlias=True, Color4f=col(self.L.get("borde_color", MARFIL), alfa_b), Style=skia.Paint.kStroke_Style, StrokeWidth=grosor_b * self.graf["linea"] / s)
         for _, path in self.geo.paises:
             c.drawPath(path, p)
         c.restore()
@@ -651,6 +651,9 @@ class Short:
                 x = self.W / 2 - total / 2
                 y = 1505 if self.vertical else 975
                 a = rampa(t, g[0]["t0"] - 0.05, 0.12)
+                if self.L.get("sub_banda"):  # banda oscura detrás de la frase, para mapas claros
+                    c.drawRoundRect(skia.Rect.MakeXYWH(x - tam * 0.45, y - tam * 1.0, total + tam * 0.9, tam * 1.38), 16, 16,
+                                    skia.Paint(AntiAlias=True, Color4f=col(self.L["sub_banda"], 0.62 * a)))
                 for w, p, an in zip(g, ps, anchos):
                     dicha = t >= w["t0"] - 0.03
                     ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1

@@ -10,7 +10,7 @@ from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok
+from . import youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok, marca
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
@@ -134,7 +134,7 @@ def botones_video(n):
 
 # ---------------- estilo y narrador ----------------
 ICONOS_LOOK = {"atlas": "🗺️", "satelite": "🛰️", "noche": "🌙", "papel": "📜", "acido": "🟢", "mesa": "✂️", "riso": "🟠", "muro": "🧱", "collage": "🟥"}
-ICONOS_CEREBRO = {"documentalista": "🎞️", "cronista": "🌮", "detective": "🔎", "profesor": "🧑‍🏫", "epico": "⚔️", "datos": "📊"}
+ICONOS_CEREBRO = {"curioso": "🤓", "documentalista": "🎞️", "cronista": "🌮", "detective": "🔎", "profesor": "🧑‍🏫", "epico": "⚔️", "datos": "📊"}
 
 
 def _nombre_look(k):
@@ -153,6 +153,7 @@ def texto_estilo(chat):
     p = ajustes.estilo(chat)
     return ("<b>🎨 Estilo y narrador</b>\n<i>Lo que elijas se usa en los siguientes videos. En Automático cambio en cada video "
             "para que el canal no se vea repetido.</i>\n\n"
+            f"🧩 Tipo  <b>{ {'curiosidades': '🧩 Curiosidades 3D', 'mapas': '🗺️ Historia con mapas'}.get(p.get('modo'), '🎲 Automático') }</b>\n"
             f"🖼️ Look  <b>{e(_nombre_look(p.get('look')))}</b>\n"
             f"🧠 Narrador  <b>{e(_nombre_cerebro(p.get('cerebro')))}</b>\n"
             f"🎙️ Voz  <b>{e(_nombre_voz(p.get('voz')))}</b>")
@@ -180,6 +181,10 @@ def botones_estilo(chat, seccion="look", video=None):
         agrega(("✅ " if not p.get("cerebro") else "") + "🎲 Automático", "est:cerebro:auto")
         for k in estilos.CEREBROS:
             agrega(("✅ " if p.get("cerebro") == k else "") + _nombre_cerebro(k), f"est:cerebro:{k}")
+    elif seccion == "tipo":
+        agrega(("✅ " if not p.get("modo") else "") + "🎲 Automático", "est:modo:auto")
+        agrega(("✅ " if p.get("modo") == "curiosidades" else "") + "🧩 Curiosidades 3D", "est:modo:curiosidades")
+        agrega(("✅ " if p.get("modo") == "mapas" else "") + "🗺️ Historia con mapas", "est:modo:mapas")
     else:
         agrega(("✅ " if not p.get("voz") else "") + "🎲 Automática", "est:voz:auto")
         for v in estilos._voces():
@@ -187,7 +192,7 @@ def botones_estilo(chat, seccion="look", video=None):
     if par:
         filas.append(list(par))
     if video is None:
-        pestanas = [("🖼️ Look", "look"), ("🧠 Narrador", "narrador"), ("🎙️ Voz", "voz")]
+        pestanas = [("🧩 Tipo", "tipo"), ("🖼️ Look", "look"), ("🧠 Narrador", "narrador"), ("🎙️ Voz", "voz")]
         filas.append([Boton(("• " if seccion == k else "") + t, callback_data=f"estsec:{k}") for t, k in pestanas])
         filas.append([Boton("👀 Ver cómo se ve cada look", callback_data="muestras")])
     return Botones(filas)
@@ -339,10 +344,10 @@ async def piloto_uno(app: Application, chat):
 
 # ---------------- pantallas ----------------
 async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    texto = ("<b>Bienvenido a FRONTERAS</b>\n<i>La historia que dibujó el mapa</i>\n\n"
+    texto = (f"<b>Bienvenido a {marca.NOMBRE}</b>\n<i>{marca.LEMA}</i>\n\n"
              "Soy tu fábrica de documentales cortos. Platica conmigo por texto o 🎙️ nota de voz.\n\n"
              "💡 Te propongo ideas y las eliges con un toque\n"
-             "🎬 Investigo, escribo, grabo la voz y animo los mapas\n"
+             "🎬 Investigo, escribo, grabo la voz y animo en 3D o con mapas\n"
              "🚀 Lo publico en Facebook, Instagram, YouTube y TikTok\n"
              "🎨 Eliges look, narrador y voz con botones\n"
              "🤖 Con el piloto automático hago y publico videos solo\n\n"
@@ -418,7 +423,8 @@ async def platicar(update: Update, ctx: ContextTypes.DEFAULT_TYPE, texto: str):
             await update.effective_message.reply_text(respuesta)
         if pedido and pedido.get("tema"):
             horizontal = bool(pedido.get("horizontal")) or es_horizontal(chat)
-            asyncio.create_task(producir(update, ctx, pedido["tema"], horizontal))
+            forzar = dict(ajustes.estilo(chat), **({"modo": pedido["modo"]} if pedido.get("modo") in ("curiosidades", "mapas") else {}))
+            asyncio.create_task(producir(update, ctx, pedido["tema"], horizontal, forzar=forzar))
     except Exception as err:
         logging.exception("charla")
         await update.effective_message.reply_text(explica(err), parse_mode=ParseMode.HTML)
@@ -613,7 +619,7 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         clave, _, val = valor.partition(":")
         ajustes.fijar_estilo(chat, clave, val)
         await q.answer("Listo")
-        seccion = {"look": "look", "cerebro": "narrador", "voz": "voz"}.get(clave, "look")
+        seccion = {"look": "look", "cerebro": "narrador", "voz": "voz", "modo": "tipo"}.get(clave, "look")
         await q.edit_message_text(texto_estilo(chat), parse_mode=ParseMode.HTML, reply_markup=botones_estilo(chat, seccion))
     elif accion == "estsec":
         await q.answer()
@@ -755,7 +761,8 @@ async def avisar_actualizacion(app: Application):
     for chat in PERMITIDOS:
         try:
             await app.bot.send_message(
-                chat, "✅ <b>Bot actualizado</b>\n\nYa tienes abajo los botones nuevos\n"
+                chat, "✅ <b>Bot actualizado</b>\n\nAhora también hago curiosidades y cultura general animadas en 3D, además de historia con mapas. "
+                      "En 🎨 Estilo, pestaña Tipo, eliges cuál o lo dejas en automático.\n\n"
                       f"🎨 <b>Estilo y narrador</b>  eliges look, forma de narrar y voz\n"
                       f"🤖 <b>Piloto automático</b>  {estado_piloto}, publica solo {p['por_dia']} al día\n\n"
                       "Si no ves los botones, toca el cuadrito de cuatro puntos junto al micrófono.",
@@ -784,9 +791,9 @@ async def al_arrancar(app: Application):
         BotCommand("ayuda", "Cómo usarme"),
     ])
     try:
-        await app.bot.set_my_short_description("Documentales cortos de historia y geografía con mapas. naked · agencia creativa")
-        await app.bot.set_my_description("FRONTERAS. La historia que dibujó el mapa.\n\nPídeme un tema por texto o nota de voz "
-                                         "y te regreso un documental corto con mapas en relieve, voz y música, listo para publicar.")
+        await app.bot.set_my_short_description("Shorts de curiosidades, cultura e historia en 3D y con mapas. naked · agencia creativa")
+        await app.bot.set_my_description(f"{marca.NOMBRE}. {marca.LEMA}.\n\nPídeme un tema por texto o nota de voz "
+                                         "y te regreso un short animado en 3D o con mapas, con voz y música, listo para publicar.")
     except Exception:
         logging.exception("descripción")
 

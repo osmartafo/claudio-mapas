@@ -7,6 +7,7 @@ Un look cambia todo el lenguaje visual del video, no solo el color:
   y las texturas y adornos.
 El look "noche" es el original. Los demás usan el mismo motor, así que no cuestan más.
 """
+from . import marca
 import math
 import numpy as np
 import skia
@@ -220,7 +221,7 @@ def _textura(tipo, W, H, L):
 def _muro(short, W, H, L):
     """Pared de texto repetido con el título del video, como fondo."""
     from .motor import fuente, mide
-    frase = (short.spec.get("titulo") or "FRONTERAS").upper() + ". "
+    frase = (short.spec.get("titulo") or marca.NOMBRE).upper() + ". "
     f = fuente("HelveticaNowDisplay-ExtraBold", 34)
     sup = skia.Surface(W, H + 120)
     o = hex_rgb(L["CARMIN"])
@@ -292,9 +293,9 @@ def acabado(short, c, t):
         f = fuente("HelveticaNowDisplay-Bold", 22)
         tinta = p["cfg"]["MARFIL"]
         m = (W - short.ANCHO_SEGURO) / 2
-        escribe(c, "LA HISTORIA QUE", m, 150, f, tinta, alfa=0.85, centro=False, sombra=0)
-        escribe(c, "DIBUJÓ EL MAPA", m, 178, f, tinta, alfa=0.85, centro=False, sombra=0)
-        escribe(c, "FRONTERAS", W / 2, 150, f, tinta, alfa=0.85, sombra=0)
+        escribe(c, " ".join(marca.LEMA.upper().split()[:2]), m, 150, f, tinta, alfa=0.85, centro=False, sombra=0)
+        escribe(c, " ".join(marca.LEMA.upper().split()[2:]), m, 178, f, tinta, alfa=0.85, centro=False, sombra=0)
+        escribe(c, marca.NOMBRE, W / 2, 150, f, tinta, alfa=0.85, sombra=0)
         anio = next((str(e.get("año")) for e in short.escenas if e.get("año") and e["_t0"] <= t), "")
         if anio:
             from .motor import mide

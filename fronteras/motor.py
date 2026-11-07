@@ -26,6 +26,7 @@ Especificación (lo que escribe el guionista, humano o IA):
   ]
 }
 """
+from . import marca
 import json, math, os, subprocess, unicodedata, gzip
 import numpy as np
 import skia
@@ -183,6 +184,7 @@ def fuente(nombre, tam):
 
 
 SOMBRA_K = 1.0  # los looks claros bajan la sombra del texto
+CONTORNO = None  # en escenas 3D el texto lleva contorno negro grueso, se lee sobre cualquier color
 
 
 def escribe(c, s, x, y, f, color, alfa=1.0, espacio=0.0, centro=True, sombra=0.6):
@@ -201,7 +203,11 @@ def escribe(c, s, x, y, f, color, alfa=1.0, espacio=0.0, centro=True, sombra=0.6
         cx += a + espacio
     blob_b.allocRunPos(f, f.textToGlyphs(s), pos)
     blob = blob_b.make()
-    if sombra:
+    if CONTORNO and isinstance(color, str):
+        pc = skia.Paint(AntiAlias=True, Color4f=col(CONTORNO, alfa), Style=skia.Paint.kStroke_Style,
+                        StrokeWidth=f.getSize() * 0.17, StrokeJoin=skia.Paint.kRound_Join)
+        c.drawTextBlob(blob, 0, 0, pc)
+    elif sombra:
         ps = skia.Paint(AntiAlias=True, Color4f=col("#000000", sombra * alfa))
         ps.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, f.getSize() * 0.12))
         c.drawTextBlob(blob, 0, f.getSize() * 0.04, ps)
@@ -331,6 +337,8 @@ class Short:
             for grupo in ("zonas", "etiquetas", "pines", "flechas"):
                 for el in e.get(grupo, []):
                     el["_t"] = self.voz.en(el["desde"], e["_t0"]) if el.get("desde") else e["_t0"] + 0.15
+            if e.get("tipo") == "ilustracion" and not e.get("broll"):
+                e["broll"] = {"motivo": e.get("motivo", "libro")}
             b = e.get("broll")
             if isinstance(b, str):
                 b = e["broll"] = {"motivo": b}
@@ -341,6 +349,7 @@ class Short:
                 b["_tf"] = b["_ti"] + clamp(e["_t1"] - b["_ti"] - 0.2, 1.4, 5.0)
             else:
                 e.pop("broll", None)
+        self._resolver_broll()
         # zonas que no existen se descartan con aviso, en vez de tumbar el video
         for e in self.escenas:
             buenas = []
@@ -353,6 +362,57 @@ class Short:
             e["zonas"] = buenas
         # una zona con "mantener" sigue visible hasta el final
         self.T_FIN = self.voz.duracion + 0.4
+
+    # ---- escenas 3D y tarjetas ilustradas
+    def preparar_3d(self, carpeta, aviso=None):
+        """Dibuja de antemano los cuadros de cada escena 3D. Si falla, esa escena pasa a tarjeta ilustrada."""
+        trabajos = []
+        for i, e in enumerate(self.escenas):
+            if e.get("tipo") == "3d" and isinstance(e.get("modelo"), dict):
+                dur = e["_t1"] - e["_t0"] + 0.15
+                destino = os.path.join(carpeta, f"escena3d_{i:02d}")
+                trabajos.append((e["modelo"], dur, destino, e))
+        if not trabajos:
+            return
+        try:
+            from . import tres
+            tres.render_paralelo([(m, d, c) for m, d, c, _ in trabajos], aviso=aviso)
+            for _, d, destino, e in trabajos:
+                e["_cuadros"] = destino
+                e["_n"] = len([f for f in os.listdir(destino) if f.endswith(".jpg")])
+        except Exception as err:
+            print("Escenas 3D no disponibles, uso tarjetas:", err)
+            for _, _, _, e in trabajos:
+                e["tipo"] = "ilustracion"
+                e.setdefault("broll", {"motivo": e.get("motivo", "libro")})
+            self._resolver_broll()
+
+    def _resolver_broll(self):
+        """Las tarjetas ilustradas ocupan su escena completa."""
+        for e in self.escenas:
+            if e.get("tipo") == "ilustracion":
+                b = e.get("broll")
+                if isinstance(b, str):
+                    b = e["broll"] = {"motivo": b}
+                if not isinstance(b, dict) or not b.get("motivo"):
+                    b = e["broll"] = {"motivo": e.get("motivo", "libro")}
+                b["_ti"], b["_tf"] = e["_t0"], e["_t1"] + 0.15
+
+    def escena_en(self, t):
+        actual = self.escenas[0]
+        for e in self.escenas:
+            if e["_t0"] <= t:
+                actual = e
+        return actual
+
+    def _cuadro_3d(self, c, e, t):
+        n = e.get("_n", 0)
+        if not n:
+            return False
+        i = int(clamp(round((t - e["_t0"]) * FPS), 0, n - 1))
+        img = skia.Image.open(os.path.join(e["_cuadros"], f"c{i:05d}.jpg"))
+        c.drawImageRect(img, skia.Rect(0, 0, self.W, self.H), skia.SamplingOptions(skia.FilterMode.kLinear))
+        return True
 
     # ---- cámara: corte suave entre escenas y empuje lento dentro de cada una
     def camara(self, t):
@@ -771,7 +831,7 @@ class Short:
         f = fuente("HelveticaNowDisplay-Bold", 30 if self.vertical else 26)
         y = self.H - 70 if self.vertical else self.H - 44
         a = 0.6 * (1 - rampa(t, self.T_FIN, 0.4))
-        escribe(c, "FRONTERAS", self.W / 2, y, f, MARFIL, alfa=a, espacio=9, sombra=0.5)
+        escribe(c, marca.NOMBRE, self.W / 2, y, f, MARFIL, alfa=a, espacio=9, sombra=0.5)
 
     def _cierre(self, c, t):
         a = rampa(t, self.T_FIN, 0.9)
@@ -781,15 +841,32 @@ class Short:
         c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col(NOCHE, 0.9 * a)))
         cy = H / 2
         f = fuente("HelveticaNowDisplay-Bold", 132 if self.vertical else 120)
-        escribe(c, "FRONTERAS", W / 2, cy, f, MARFIL, alfa=a, espacio=22 * (0.6 + 0.4 * sale((t - self.T_FIN) / 1.6)))
+        escribe(c, marca.NOMBRE, W / 2, cy, f, MARFIL, alfa=a, espacio=22 * (0.6 + 0.4 * sale((t - self.T_FIN) / 1.6)))
         lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, a), StrokeWidth=2)
         L = 180 * sale((t - self.T_FIN - 0.3) / 1.0)
         c.drawLine(W / 2 - L, cy + 52, W / 2 + L, cy + 52, lp)
         f2 = fuente("HelveticaNowDisplay-Regular", 46 if self.vertical else 40)
-        escribe(c, "La historia que dibujó el mapa", W / 2, cy + 128, f2, ORO_CLARO, alfa=rampa(t, self.T_FIN + 0.5, 0.8))
+        escribe(c, marca.LEMA, W / 2, cy + 128, f2, ORO_CLARO, alfa=rampa(t, self.T_FIN + 0.5, 0.8))
 
     # ---- un fotograma
     def dibujar(self, c, t):
+        global MARFIL, CONTORNO, SOMBRA_K
+        e_act = self.escena_en(t)
+        if e_act.get("tipo") == "3d" and e_act.get("_n"):
+            guardado = (MARFIL, CONTORNO, SOMBRA_K)
+            MARFIL, CONTORNO, SOMBRA_K = "#FFFFFF", "#111111", 0.0
+            try:
+                self._cuadro_3d(c, e_act, t)
+                self._destello(c, t)
+                if e_act["_t0"] - 0.1 <= t < e_act["_t1"] + 0.6:
+                    self._titulos(c, t, e_act)
+                if t < self.T_FIN:
+                    self._subtitulos(c, t)
+                self._marca(c, t)
+                self._cierre(c, t)
+            finally:
+                MARFIL, CONTORNO, SOMBRA_K = guardado
+            return
         m, s = self.matriz(t)
         from . import looks as _lk
         if self.clave_look != "noche":

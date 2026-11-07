@@ -41,6 +41,11 @@ CEREBROS = {
         "voz_texto": "Tono cinematográfico y épico, en presente histórico (el ejército cruza, el rey firma). Ritmo de tráiler de película.",
         "gancho": "Abre en medio de la acción, en el momento más tenso de la historia.",
     },
+    "curioso": {
+        "nombre": "Amigo curioso",
+        "voz_texto": "Tono de amigo listo que te explica algo cotidiano con chispa y cariño. Segunda persona, coloquial mexicano, frases cortas, alguna exclamación natural (no manches, fíjate). Cero solemnidad.",
+        "gancho": "Abre señalando algo concreto que el espectador tiene o ve todos los días y dile que no es lo que cree.",
+    },
     "datos": {
         "nombre": "Contador de datos",
         "voz_texto": "Tono de periodista de datos. Cada frase trae una cifra, un año o una comparación. Directo, rápido, sin adornos.",

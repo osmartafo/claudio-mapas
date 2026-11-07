@@ -3,6 +3,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libfontc
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Chromium sin ventana para dibujar las escenas 3D (three.js)
+RUN python -m playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY . .
 ENV FRONTERAS_SALIDA=/app/videos PYTHONUNBUFFERED=1
 CMD ["python", "-m", "fronteras.bot"]

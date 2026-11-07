@@ -7,3 +7,4 @@ anthropic>=0.70
 requests>=2.32
 python-telegram-bot==21.11.1
 json-repair>=0.30
+playwright==1.48.0

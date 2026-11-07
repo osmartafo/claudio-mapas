@@ -4,6 +4,7 @@ Uso:
     python -m fronteras.fabrica "por qué Bolivia no tiene mar"
     python -m fronteras.fabrica "..." --horizontal
 """
+from . import marca
 import json, os, re, sys, time, unicodedata
 
 from . import guionista, voz, musica, sfx, estilos
@@ -32,7 +33,33 @@ def _previa(tema):
     return os.path.join(SALIDA, sorted(cand)[-1]) if cand else None
 
 
-def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False, forzar=None):
+PALABRAS_MAPA = ("país", "pais", "frontera", "mapa", "imperio", "territorio", "isla", "continente", "capital", "tratado",
+                 "guerra", "región", "region", "estado de", "colonia", "independencia", "conquista", "reino", "océano",
+                 "oceano", "mar ", "río ", "rio ", "ciudad", "dinastía", "civilización", "ruta", "península", "desierto de")
+
+
+def modo_de(tema):
+    """Curiosidades o mapas. Si el tema nombra un país o habla de fronteras e historia, va con mapas."""
+    t = " " + tema.lower() + " "
+    if any(p in t for p in PALABRAS_MAPA):
+        return "mapas"
+    try:
+        from .motor import _n
+        import gzip
+        if not hasattr(modo_de, "_nombres"):
+            g = json.load(gzip.open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "datos", "geo.json.gz"), "rt", encoding="utf-8"))
+            modo_de._nombres = {k.split(":", 1)[1] for k in g if k.startswith("pais:") and len(k) > 9}
+        import re as _re
+        palabras = [_n(w) for w in _re.findall(r"\w+", t)]
+        juntas = set(palabras) | {a + b for a, b in zip(palabras, palabras[1:])} | {a + b + c for a, b, c in zip(palabras, palabras[1:], palabras[2:])}
+        if juntas & modo_de._nombres:
+            return "mapas"
+    except Exception:
+        pass
+    return "curiosidades"
+
+
+def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False, forzar=None, modo=None):
     """nuevo=False reusa el guion y la voz de un intento anterior del mismo tema, para no pagar dos veces.
     forzar fija partes del estilo, ej. {"look": "satelite", "cerebro": "detective", "voz": "..."}."""
     forzar = {k: v for k, v in (forzar or {}).items() if v}
@@ -49,7 +76,9 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     else:
         est = estilos.elegir(forzar)
         aviso(1, f"Escribiendo con estilo {estilos.describir(est)}")
-        spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est))
+        modo = modo or forzar.get("modo") or modo_de(tema)
+        aviso(1, f"Escribiendo ({'curiosidad en 3D' if modo == 'curiosidades' else 'historia con mapas'}) con estilo {estilos.describir(est)}")
+        spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est), modo=modo)
     spec["estilo"] = est
     spec["formato"] = "horizontal" if horizontal else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
@@ -69,6 +98,9 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
         aviso(4, "Animando los mapas (ajusté una escena)")
         spec["escenas"] = _limpia(spec, v)
         short = Short(spec, v)
+    if any(e.get("tipo") == "3d" for e in short.escenas):
+        aviso(4, "Animando en 3D", 0.0)
+        short.preparar_3d(carpeta, aviso=lambda f: aviso(4, "Animando en 3D", 0.5 * f))
     try:
         sfx.componer(short.duracion, short.eventos(), f"{carpeta}/sfx.wav")
         fx = f"{carpeta}/sfx.wav"
@@ -81,7 +113,7 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
                          progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
-    texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de FRONTERAS."
+    texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de " + marca.NOMBRE.title() + "."
     open(f"{carpeta}/descripcion.txt", "w").write(texto)
     return video, texto
 

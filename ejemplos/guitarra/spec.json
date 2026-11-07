@@ -1,0 +1,1656 @@
+{
+ "titulo": "Esa tapita de tu guitarra no está de adorno 🎸",
+ "descripcion": "prueba",
+ "fuentes": [],
+ "guion": "Esa tapita en la cabeza de tu guitarra no está de adorno. Y la razón es más ingeniosa de lo que crees. Debajo hay un engrane escondido. Cuando giras la llave, un tornillo sin fin mueve ese engrane. Pero aquí viene lo bueno. El engrane solo avanza si tú lo empujas. La cuerda jala con fuerza y no puede regresarlo. Por eso tu guitarra no se desafina sola. Este invento viene de Alemania en mil ochocientos veinte. Así que la próxima vez que veas esa tapita, ya sabes que no está de adorno.",
+ "latitud_media": 45,
+ "modo": "curiosidades",
+ "escenas": [
+  {
+   "tipo": "3d",
+   "titulo": "No está de adorno",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "tapa",
+      "forma": "caja",
+      "tam": [
+       0.5,
+       0.06,
+       0.4
+      ],
+      "pos": [
+       1.2,
+       1.8,
+       0.2
+      ],
+      "color": "#2B2B2B"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       6,
+       5,
+       7
+      ],
+      "mira": [
+       0,
+       1.6,
+       0
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       3,
+       3,
+       3.5
+      ],
+      "mira": [
+       1,
+       1.7,
+       0.2
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Y la razón",
+   "tipo": "3d",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "tapa",
+      "forma": "caja",
+      "tam": [
+       0.5,
+       0.06,
+       0.4
+      ],
+      "pos": [
+       1.2,
+       1.8,
+       0.2
+      ],
+      "color": "#2B2B2B"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       2.5,
+       2.6,
+       2.5
+      ],
+      "mira": [
+       1.2,
+       1.8,
+       0.2
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       1.8,
+       2.4,
+       1.6
+      ],
+      "mira": [
+       1.2,
+       1.8,
+       0.2
+      ]
+     }
+    ],
+    "animar": [
+     {
+      "id": "tapa",
+      "t0": 0.2,
+      "t1": 0.7,
+      "mover": [
+       0,
+       0.8,
+       0
+      ]
+     },
+     {
+      "id": "tapa",
+      "t0": 0.6,
+      "t1": 0.9,
+      "desaparece": true
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Debajo hay",
+   "tipo": "3d",
+   "cifra": "engrane escondido",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       1.9,
+       2.3,
+       1.4
+      ],
+      "mira": [
+       1.2,
+       1.85,
+       0.3
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       1.5,
+       2.4,
+       1.1
+      ],
+      "mira": [
+       1.2,
+       1.85,
+       0.3
+      ]
+     }
+    ],
+    "animar": [
+     {
+      "id": "engrane",
+      "t0": 0.1,
+      "t1": 0.5,
+      "resaltar": true
+     }
+    ],
+    "etiquetas": [
+     {
+      "texto": "engrane",
+      "en": [
+       1.2,
+       2.1,
+       0.2
+      ],
+      "t0": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Cuando giras",
+   "tipo": "3d",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       2.2,
+       2.2,
+       1.9
+      ],
+      "mira": [
+       1.2,
+       1.82,
+       0.4
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       0.6,
+       2.3,
+       1.9
+      ],
+      "mira": [
+       1.2,
+       1.82,
+       0.4
+      ]
+     }
+    ],
+    "animar": [
+     {
+      "id": "llave",
+      "t0": 0.1,
+      "t1": 1,
+      "girar": [
+       0,
+       0,
+       720
+      ]
+     },
+     {
+      "id": "tornillo",
+      "t0": 0.1,
+      "t1": 1,
+      "girar": [
+       0,
+       720,
+       0
+      ]
+     },
+     {
+      "id": "engrane",
+      "t0": 0.1,
+      "t1": 1,
+      "girar": [
+       0,
+       90,
+       0
+      ]
+     }
+    ],
+    "flechas": [
+     {
+      "de": [
+       1.6,
+       2.4,
+       1.1
+      ],
+      "a": [
+       1.25,
+       1.9,
+       0.5
+      ],
+      "t0": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Pero aquí",
+   "tipo": "ilustracion",
+   "motivo": "reloj",
+   "titulo": "Aquí viene lo bueno"
+  },
+  {
+   "desde": "El engrane solo",
+   "tipo": "3d",
+   "titulo": "Solo avanza",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       1.4,
+       3,
+       0.6
+      ],
+      "mira": [
+       1.2,
+       1.85,
+       0.2
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       1.9,
+       2.8,
+       0.9
+      ],
+      "mira": [
+       1.2,
+       1.85,
+       0.2
+      ]
+     }
+    ],
+    "animar": [
+     {
+      "id": "engrane",
+      "t0": 0.2,
+      "t1": 0.9,
+      "girar": [
+       0,
+       60,
+       0
+      ],
+      "rebote": true
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Por eso tu",
+   "tipo": "3d",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "tapa",
+      "forma": "caja",
+      "tam": [
+       0.5,
+       0.06,
+       0.4
+      ],
+      "pos": [
+       1.2,
+       1.8,
+       0.2
+      ],
+      "color": "#2B2B2B"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       4,
+       3,
+       4
+      ],
+      "mira": [
+       0,
+       1.6,
+       0
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       5,
+       4,
+       -3
+      ],
+      "mira": [
+       0,
+       1.6,
+       0
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "desde": "Este invento",
+   "camara": [
+    10,
+    51,
+    14
+   ],
+   "año": "1820",
+   "zonas": [
+    {
+     "zona": "pais:DEU",
+     "estilo": "oro"
+    }
+   ],
+   "pines": [
+    {
+     "texto": "Alemania",
+     "lugar": [
+      10.4,
+      51.1
+     ]
+    }
+   ]
+  },
+  {
+   "desde": "Así que",
+   "tipo": "3d",
+   "titulo": "Ya sabes",
+   "modelo": {
+    "objetos": [
+     {
+      "id": "mesa",
+      "forma": "caja",
+      "tam": [
+       5,
+       0.25,
+       3
+      ],
+      "pos": [
+       0,
+       1.5,
+       0
+      ],
+      "color": "#E3B57A"
+     },
+     {
+      "id": "pata0",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata1",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       -1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata2",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       -2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "pata3",
+      "forma": "caja",
+      "tam": [
+       0.25,
+       1.5,
+       0.25
+      ],
+      "pos": [
+       2.2,
+       0.75,
+       1.2
+      ],
+      "color": "#C99A5B"
+     },
+     {
+      "id": "cabeza",
+      "forma": "caja",
+      "tam": [
+       1.6,
+       0.15,
+       0.9
+      ],
+      "pos": [
+       1.2,
+       1.7,
+       0
+      ],
+      "color": "#7A4A2A"
+     },
+     {
+      "id": "mastil",
+      "forma": "caja",
+      "tam": [
+       2.6,
+       0.12,
+       0.5
+      ],
+      "pos": [
+       -0.8,
+       1.68,
+       0
+      ],
+      "color": "#9B6B3F"
+     },
+     {
+      "id": "tapa",
+      "forma": "caja",
+      "tam": [
+       0.5,
+       0.06,
+       0.4
+      ],
+      "pos": [
+       1.2,
+       1.8,
+       0.2
+      ],
+      "color": "#2B2B2B"
+     },
+     {
+      "id": "engrane",
+      "forma": "engrane",
+      "radio": 0.18,
+      "alto": 0.06,
+      "dientes": 14,
+      "pos": [
+       1.2,
+       1.85,
+       0.2
+      ],
+      "color": "#FFD23F"
+     },
+     {
+      "id": "llave",
+      "forma": "capsula",
+      "radio": 0.09,
+      "alto": 0.25,
+      "pos": [
+       1.2,
+       1.8,
+       0.75
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#F4F4F4"
+     },
+     {
+      "id": "tornillo",
+      "forma": "resorte",
+      "radio": 0.05,
+      "alto": 0.5,
+      "vueltas": 7,
+      "grosor": 0.015,
+      "pos": [
+       1.2,
+       1.8,
+       0.45
+      ],
+      "rot": [
+       90,
+       0,
+       0
+      ],
+      "color": "#CFCFCF"
+     },
+     {
+      "id": "cuerda",
+      "forma": "tubo",
+      "puntos": [
+       [
+        -2,
+        1.76,
+        0.05
+       ],
+       [
+        1.2,
+        1.86,
+        0.2
+       ]
+      ],
+      "grosor": 0.01,
+      "color": "#DDDDDD"
+     }
+    ],
+    "camara": [
+     {
+      "t": 0,
+      "pos": [
+       2,
+       2.5,
+       2
+      ],
+      "mira": [
+       1.2,
+       1.8,
+       0.2
+      ]
+     },
+     {
+      "t": 1,
+      "pos": [
+       6,
+       5,
+       7
+      ],
+      "mira": [
+       0,
+       1.6,
+       0
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

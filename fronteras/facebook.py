@@ -6,7 +6,7 @@ Variables
                        instagram_basic, instagram_content_publish)
   INSTAGRAM_ID         opcional; si falta se busca el Instagram ligado a la página
 """
-import os, time
+import json, os, time
 import requests
 
 V = "v21.0"
@@ -116,12 +116,33 @@ def instagram_configurado():
         return False
 
 
+def _diagnostico_instagram(ig, contenedor, token):
+    """Deja en el registro de errores todo lo que Meta dice del rechazo, para encontrar la causa de raíz."""
+    import logging
+    datos = {}
+    for nombre, url, campos in [
+        ("contenedor", f"{GRAPH}/{contenedor}", "status_code,status,id"),
+        ("cuenta", f"{GRAPH}/{ig}", "username,followers_count,media_count"),
+        ("cupo", f"{GRAPH}/{ig}/content_publishing_limit", "quota_usage,config"),
+    ]:
+        try:
+            datos[nombre] = requests.get(url, params={"fields": campos, "access_token": token}, timeout=30).json()
+        except Exception as err:
+            datos[nombre] = str(err)
+    try:
+        datos["permisos"] = requests.get(f"{GRAPH}/me/permissions", params={"access_token": _token_crudo()}, timeout=30).json()
+    except Exception as err:
+        datos["permisos"] = str(err)
+    logging.error(f"Diagnóstico de Instagram: {json.dumps(datos, ensure_ascii=False)[:2500]}")
+
+
 def _esperar_y_publicar(ig, contenedor, token):
     for _ in range(90):
         st = _revisa(requests.get(f"{GRAPH}/{contenedor}", params={"fields": "status_code,status", "access_token": token}, timeout=30))
         if st.get("status_code") == "FINISHED":
             break
         if st.get("status_code") == "ERROR":
+            _diagnostico_instagram(ig, contenedor, token)
             raise RuntimeError(f"Instagram no pudo procesar el video: {st.get('status')}")
         time.sleep(5)
     else:

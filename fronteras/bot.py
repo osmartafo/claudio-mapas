@@ -292,8 +292,7 @@ async def piloto_uno(app: Application, chat):
     """Un video completo sin intervención: tema nuevo, producción y publicación."""
     p = ajustes.piloto()
     hechos_antes = ajustes.temas_hechos()
-    pedido = ("Dame 8 ideas nuevas de temas para el canal, variadas en región y época. No repitas ninguno de estos: "
-              + "; ".join(hechos_antes[-60:]))
+    pedido = pedido_ideas()
     _, _, ideas = await asyncio.to_thread(charla.responder, f"piloto-{time.time()}", pedido)
     tema = next((i for i in ideas if i not in hechos_antes), None)
     if not tema:
@@ -365,7 +364,7 @@ async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
         "<b>❓ Cómo usarme</b>\n\n"
-        "💬 <b>Platica normal.</b> \"Dame ideas de Sudamérica\", \"hazme el de Alaska\", \"uno sobre Gibraltar\"\n"
+        "💬 <b>Platica normal.</b> \"Dame ideas de cocina\", \"hazme el de Alaska\", \"uno sobre por qué bostezamos\"\n"
         "🎙️ <b>Notas de voz.</b> Te escucho igual que por texto\n"
         "💡 <b>Ideas.</b> Toca una y empiezo el video\n"
         "📐 <b>Formato.</b> Vertical para Shorts y Reels, horizontal para YouTube normal\n"
@@ -407,6 +406,25 @@ async def pedir_tema(update: Update):
         parse_mode=ParseMode.HTML)
 
 
+# ---------------- ideas ----------------
+CATEGORIAS = ["cocina y utensilios", "baño y regadera", "coches y bicicletas", "aviones y aeropuertos", "barcos y el mar",
+              "el cuerpo humano", "animales de granja", "insectos", "animales del mar", "aves", "plantas y árboles",
+              "comida mexicana", "dulces y botanas", "ropa y zapatos", "herramientas", "electrodomésticos", "celulares y computadoras",
+              "deportes", "instrumentos musicales", "juguetes y juegos", "dinero y monedas", "idiomas y palabras", "el espacio",
+              "el clima", "edificios y casas", "trenes y metro", "medicina y hospitales", "oficina y escuela", "mitos que todos creen",
+              "inventos antiguos", "costumbres de otros países", "historia con mapas", "geografía rara"]
+
+
+def pedido_ideas(extra=""):
+    """Arma la petición de ideas con categorías al azar y la lista de lo ya propuesto, para que nunca se repitan."""
+    import random
+    cats = random.sample(CATEGORIAS, 5)
+    vistas = (ajustes.ideas_dadas() + ajustes.temas_hechos())[-120:]
+    return (f"Dame 8 ideas nuevas{(' ' + extra) if extra else ''}. Esta vez inspírate sobre todo en estos temas: {', '.join(cats)}. "
+            "Unas 6 de curiosidades y 2 de historia o geografía con mapa. "
+            "Prohibido repetir o parafrasear cualquiera de estas, ya se usaron: " + "; ".join(vistas))
+
+
 # ---------------- plática ----------------
 async def platicar(update: Update, ctx: ContextTypes.DEFAULT_TYPE, texto: str):
     if not autorizado(update):
@@ -416,6 +434,7 @@ async def platicar(update: Update, ctx: ContextTypes.DEFAULT_TYPE, texto: str):
         await ctx.bot.send_chat_action(chat, ChatAction.TYPING)
         respuesta, pedido, ideas = await asyncio.to_thread(charla.responder, chat, texto)
         if ideas:
+            ajustes.anotar_ideas(ideas)
             await update.effective_message.reply_text(
                 f"💡 <b>{e(respuesta)}</b>\n<i>Toca una para producirla</i>", parse_mode=ParseMode.HTML,
                 reply_markup=botones_ideas(ideas))
@@ -435,7 +454,7 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     t = update.message.text.strip()
     if t == B_IDEAS:
-        await platicar(update, ctx, "Dame ideas nuevas de temas sencillos")
+        await platicar(update, ctx, pedido_ideas())
     elif t == B_NUEVO:
         await pedir_tema(update)
     elif t == B_FORMATO:
@@ -575,7 +594,7 @@ async def cmd_horizontal(update, ctx):
 
 
 async def cmd_ideas(update, ctx):
-    await platicar(update, ctx, "Dame ideas nuevas de temas sencillos")
+    await platicar(update, ctx, pedido_ideas())
 
 
 async def cmd_formato(update, ctx):
@@ -606,7 +625,7 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             asyncio.create_task(producir(update, ctx, tema, es_horizontal(chat)))
     elif accion == "mas":
         await q.answer("💡 Buscando…")
-        await platicar(update, ctx, "Dame más ideas, distintas a las anteriores")
+        await platicar(update, ctx, pedido_ideas("distintas a las anteriores"))
     elif accion == "propio":
         await q.answer()
         await pedir_tema(update)

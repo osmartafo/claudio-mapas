@@ -110,3 +110,16 @@ def contar_hoy(clave, fecha):
 
 def visto_hoy(clave, fecha):
     return _leer().get("contadores", {}).get(f"{fecha} {clave}", 0)
+
+
+def ideas_dadas():
+    return list(_leer().get("ideas_dadas", []))
+
+
+def anotar_ideas(ideas):
+    with _candado:
+        d = _leer()
+        lista = d.get("ideas_dadas", [])
+        lista += [i for i in ideas if i not in lista]
+        d["ideas_dadas"] = lista[-200:]
+        _escribir(d)

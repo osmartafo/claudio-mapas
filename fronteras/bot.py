@@ -244,7 +244,21 @@ async def menu_piloto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(texto_piloto(), parse_mode=ParseMode.HTML, reply_markup=botones_piloto())
 
 
-async def publicar_en(destinos, video, texto, yt_publico=False):
+async def reintentar_instagram(app, chat, video, texto):
+    for espera in (600, 1200, 1800):
+        await asyncio.sleep(espera)
+        try:
+            liga = await asyncio.to_thread(facebook.publicar_instagram, video, texto)
+            await app.bot.send_message(chat, f'✅ 📸 <b>Ya quedó en Instagram</b>\n<a href="{e(liga)}">{e(liga)}</a>',
+                                       parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            return
+        except Exception as err:
+            logging.warning(f"reintento instagram: {err}")
+    await app.bot.send_message(chat, "❌ 📸 Instagram siguió rechazando ese video después de una hora. Lo reviso.")
+    logging.error("Instagram rechazó el video tras tres reintentos (2207076)")
+
+
+async def publicar_en(destinos, video, texto, yt_publico=False, chat=None, app=None):
     """Publica en los destinos y regresa (líneas de texto, botones de ligas)."""
     lineas, ligas = [], []
     for d in destinos:
@@ -253,7 +267,14 @@ async def publicar_en(destinos, video, texto, yt_publico=False):
             if d == "fb":
                 liga = await asyncio.to_thread(facebook.publicar_reel, video, texto)
             elif d == "ig":
-                liga = await asyncio.to_thread(facebook.publicar_instagram, video, texto)
+                try:
+                    liga = await asyncio.to_thread(facebook.publicar_instagram, video, texto)
+                except Exception as err:
+                    if chat is not None and app is not None and "2207076" in str(err):
+                        # Meta a veces rechaza un video y lo acepta minutos después: se reintenta solo y se avisa
+                        asyncio.get_running_loop().create_task(reintentar_instagram(app, chat, video, texto))
+                        raise RuntimeError("Instagram lo rechazó por ahora. Lo reintento solo en 10, 30 y 60 minutos y te aviso aquí.") from err
+                    raise
             elif d == "tt":
                 liga = await asyncio.to_thread(tiktok.subir, video, texto)
             else:
@@ -292,9 +313,24 @@ async def piloto_uno(app: Application, chat):
     """Un video completo sin intervención: tema nuevo, producción y publicación."""
     p = ajustes.piloto()
     hechos_antes = ajustes.temas_hechos()
-    pedido = pedido_ideas()
-    _, _, ideas = await asyncio.to_thread(charla.responder, f"piloto-{time.time()}", pedido)
-    tema = next((i for i in ideas if i not in hechos_antes), None)
+    usados = set(hechos_antes) | set(ajustes.ideas_dadas())
+    tema = None
+    for _ in range(2):  # la IA propone; si falla o repite, se intenta otra vez
+        try:
+            _, _, ideas = await asyncio.to_thread(charla.responder, f"piloto-{time.time()}", pedido_ideas())
+        except Exception:
+            logging.exception("piloto ideas")
+            ideas = []
+        tema = next((i for i in ideas if i not in hechos_antes), None)
+        if tema:
+            break
+    if not tema:  # reserva: nunca se queda sin video
+        import random
+        from . import banco_temas
+        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS if t not in usados]
+        if libres:
+            curios = [t for t in libres if t in banco_temas.CURIOSIDADES]
+            tema = random.choice(curios if curios and random.random() < 0.7 else libres)
     if not tema:
         await app.bot.send_message(chat, "🤖 El piloto no encontró un tema nuevo esta vez. Lo intento en la siguiente hora programada.")
         return
@@ -325,7 +361,7 @@ async def piloto_uno(app: Application, chat):
         else:
             ajustes.contar_hoy("yt", hoy)
     await aviso.edit_text(f"🤖 <b>Piloto automático</b>\n<b>{e(tema)}</b> listo, publicando…", parse_mode=ParseMode.HTML)
-    lineas, ligas = await publicar_en(destinos, video, texto, p["yt_publico"])
+    lineas, ligas = await publicar_en(destinos, video, texto, p["yt_publico"], chat=chat, app=app)
     titulo = texto.partition("\n")[0]
     envio = await asyncio.to_thread(copia_telegram, video)
     with open(envio, "rb") as f:
@@ -739,7 +775,7 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         destinos = {"fb": ["fb"], "ig": ["ig"], "meta": ["fb", "ig"], "tt": ["tt"]}[accion]
         aviso = await q.message.reply_text("🚀 Publicando…" + ("\n<i>Instagram puede tardar unos minutos.</i>" if "ig" in destinos else ""),
                                            parse_mode=ParseMode.HTML)
-        lineas, ligas = await publicar_en(destinos, video, texto)
+        lineas, ligas = await publicar_en(destinos, video, texto, chat=chat, app=ctx.application)
         await aviso.edit_text("📍 <b>Dónde quedó publicado</b>\n\n" + "\n\n".join(lineas), parse_mode=ParseMode.HTML,
                               disable_web_page_preview=True,
                               reply_markup=Botones([[Boton(t, url=u)] for t, u in ligas]) if ligas else None)

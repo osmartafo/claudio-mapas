@@ -13,9 +13,9 @@ import numpy as np
 from PIL import Image
 
 URL = os.environ.get("FRONTERAS_TESELAS", "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png")
-CACHE = os.environ.get("FRONTERAS_CACHE_TESELAS", "/tmp/teselas")
-MAX_TESELAS = int(os.environ.get("FRONTERAS_MAX_TESELAS", "260"))  # por capa
-Z_MAX = 10
+CACHE = os.environ.get("FRONTERAS_CACHE_TESELAS", "/data/teselas" if os.path.isdir("/data") else "/tmp/teselas")  # en /data se reusan entre videos
+MAX_TESELAS = int(os.environ.get("FRONTERAS_MAX_TESELAS", "140"))  # por capa
+Z_MAX = 8
 BASE_DENS = 30.0  # pixeles por grado del mapa base
 
 
@@ -178,7 +178,7 @@ def plan(camaras, K, W=1080, H=1920):
             continue
         if all(zz != o[0] for o in salida):  # si ya hay una capa de ese zoom, esa es más grande
             salida.append((zz, caja))
-    return salida
+    return salida[-2:]  # como máximo dos capas: la más fina y una intermedia, para no tardar
 
 
 def _color_satelite(hs, elev, caja):

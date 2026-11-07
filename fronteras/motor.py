@@ -445,6 +445,10 @@ class Short:
 
     def matriz(self, t):
         lon, lat, ancho = self.camara(t)
+        # la toma nunca se abre más que el mundo: así no se ve el borde del mapa ni un rectángulo con el planeta chiquito
+        ancho = min(ancho, 340, 172 * self.W / (self.H * self.K))
+        medio = self.H * ancho * self.K / self.W / 2
+        lat = clamp(lat, -88 + medio, 88 - medio)
         s = self.W / (ancho * self.K)
         m = skia.Matrix()
         m.setTranslate(self.W / 2, self.H * (0.52 if self.vertical else 0.5))
@@ -496,7 +500,8 @@ class Short:
             else:
                 orden = self.__dict__.setdefault("_colores_zona", {})
                 tono = orden.setdefault(clave, self.VIVOS[len(orden) % len(self.VIVOS)])
-            relleno = 0.0 if estilo == "contorno" else 0.82
+            # translúcido: el color marca la zona pero el relieve se sigue viendo debajo
+            relleno = 0.0 if estilo == "contorno" else 0.5
             c.save()
             c.concat(m)
             if relleno:

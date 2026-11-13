@@ -78,7 +78,10 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
         aviso(1, f"Escribiendo con estilo {estilos.describir(est)}")
         modo = modo or forzar.get("modo") or modo_de(tema)
         aviso(1, f"Escribiendo ({'curiosidad en 3D' if modo == 'curiosidades' else 'historia con mapas'}) con estilo {estilos.describir(est)}")
-        spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est), modo=modo)
+        if modo == "curiosidades":
+            spec = guionista.escribir_curiosidad(tema, estilo_texto=estilos.instrucciones_guion(est), aviso=lambda m: aviso(1, m))
+        else:
+            spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est), modo=modo)
     spec["estilo"] = est
     spec["formato"] = "horizontal" if horizontal else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
@@ -113,6 +116,8 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
                          progreso=lambda f: aviso(4, "Animando los mapas", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
+    if getattr(short, "creditos", None):
+        texto += "\n\nModelos 3D (Objaverse, Sketchfab)\n" + "\n".join(short.creditos)
     texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de " + marca.NOMBRE.title() + "."
     open(f"{carpeta}/descripcion.txt", "w").write(texto)
     return video, texto

@@ -13,3 +13,7 @@ ejemplos/*/musica.wav
 estilos_usados.json
 datos_locales/
 hechos.json
+
+assets/tres/modelos/
+datos_locales/
+ejemplos/guitarra/spec_cat.json

@@ -198,3 +198,165 @@ def escribir(tema, api_key=None, estilo_texto="", modo="mapas"):
     spec.setdefault("formato", "vertical")
     spec["modo"] = modo
     return spec
+
+
+# ================= curiosidades en tres pasos: esqueleto y guion, auditoría, dirección =================
+# Método Zepfilms (Nicolás Amelio-Ortiz) llevado a un short de 50 segundos: premisa con personaje, acción y conflicto,
+# disparador en los primeros segundos, curva que siempre sube, siembra y cosecha, clímax y salida rápida.
+
+PASO_GUION = """Eres el guionista de un canal de shorts de curiosidades y cultura general en español de México.
+Trabajas con el método de guion de Zepfilms aplicado a un video de 50 segundos.
+
+LEYES
+- Sin personaje no hay conflicto. El personaje es el objeto, animal o persona del tema, o el propio espectador ("tú").
+  Tiene algo que "quiere" o hace, y algo que lo complica. Eso es el conflicto.
+- Primer punto de giro en los primeros 3 segundos. Se empieza en conflicto, nunca con contexto.
+- La curva siempre sube. Cada paso revela algo más sorprendente que el anterior.
+- Lo que se siembra se cosecha. Si mencionas un detalle al inicio, se paga al final.
+- Mostrar, no explicar. Cada frase se puede ver en pantalla.
+- Datos verdaderos y verificados con la búsqueda web (una o dos búsquedas). Si no se puede confirmar, no va.
+
+ESQUELETO (llénalo primero, es tu escaleta)
+- premisa: personaje + acción + conflicto, en una frase
+- gancho: la primera frase, que rompe una creencia o señala algo concreto ("Esa tapita de tu guitarra no está de adorno")
+- promesa: por qué vale la pena quedarse
+- pasos: tres revelaciones en orden creciente
+- giro: el reenganche hacia el segundo 25 ("pero aquí viene lo bueno"), algo que contradice lo que parecía
+- remate: el dato que hace decir "no manches", el clímax
+- siembra: qué detalle del gancho se paga en el remate
+- cierre: la última frase conecta con la primera para que el video se vea en bucle
+
+GUION
+110 a 140 palabras, frases de 4 a 10 palabras, segunda persona, español de México natural, números escritos con letra.
+
+Responde SOLO con JSON
+{"titulo": "máx 70 caracteres, puede llevar un emoji", "descripcion": "2 a 4 frases y 3 hashtags",
+ "fuentes": ["url"], "esqueleto": {"premisa": "", "gancho": "", "promesa": "", "pasos": ["", "", ""], "giro": "", "remate": "", "siembra": "", "cierre": ""},
+ "guion": "texto completo que leerá la voz"}
+"""
+
+PASO_AUDITORIA = """Eres script doctor con el método de Zepfilms. Recibes el esqueleto y el guion de un short de 50 segundos.
+Revisa en este orden y sé exigente, sin piedad con el guion
+1. ¿La premisa se entiende en una frase? ¿Hay personaje y conflicto real?
+2. ¿El gancho engancha en 3 segundos o empieza con contexto aburrido?
+3. ¿La curva siempre sube o hay un paso más flojo que el anterior?
+4. ¿Hay exposición obvia, frases que explican lo que se va a ver, relleno, o muletillas de IA ("en el mundo de", "sin duda", "fascinante", "increíble pero cierto")?
+5. ¿Lo sembrado se cosecha? ¿El cierre conecta con el gancho?
+6. ¿Cada frase se puede mostrar en pantalla?
+7. ¿Suena a persona de México hablando, con ritmo, o suena a texto escrito?
+8. ¿Los datos son concretos (una medida, un año, un material) y no vagos?
+
+Luego REESCRIBE el guion corrigiendo todo lo que encontraste. Conserva los datos verificados, la extensión (110 a 140 palabras)
+y los números con letra. Si algo ya funciona, protégelo.
+
+Responde SOLO con JSON
+{"calificacion": 1 a 10 del guion original, "problemas": ["problema concreto y en qué frase"], "funciona": ["lo que se protegió"],
+ "guion": "guion reescrito y final"}
+"""
+
+PASO_DIRECCION = """Eres el director de animación 3D de un canal de shorts. Recibes un guion final y su esqueleto.
+Tu trabajo es dirigir el video con UN CORTE CADA 2.5 A 4 SEGUNDOS (12 a 18 escenas), con modelos 3D reales.
+
+ESCENA 3D (el tipo principal, 70 a 85 por ciento)
+{"desde": "2 o 3 palabras exactas del guion", "tipo": "3d", "cifra": "opcional, máximo 4 palabras",
+ "modelo": {
+   "objetos": [
+     {"id": "tiburon", "catalogo": "shark", "tamano": 2.5, "pos": [0, 0.6, 0], "rot": [0, 30, 0]},
+     {"id": "mesa", "catalogo": "table", "tamano": 1.6, "pos": [0, 0, 0]},
+     {"id": "flecha_base", "forma": "cilindro", "radio": 0.02, "alto": 0.5, "pos": [1, 1, 0], "color": "#FF5A4E"}
+   ],
+   "camara": [{"t": 0, "pos": [4, 2.5, 5], "mira": [0, 1, 0]}, {"t": 1, "pos": [1.6, 1.4, 2], "mira": [0, 1, 0]}],
+   "animar": [{"id": "tiburon", "t0": 0, "t1": 1, "girar": [0, 40, 0]}],
+   "etiquetas": [{"texto": "aleta", "en": [0, 2, 0], "t0": 0.4}],
+   "flechas": [{"de": [2, 2.5, 1], "a": [0.3, 1.6, 0], "t0": 0.5}]
+ }}
+REGLAS DEL 3D
+- Usa SIEMPRE modelos reales con "catalogo": el nombre EXACTO de una categoría de la lista que te doy. Elige la categoría
+  más cercana a lo que dice la voz (para "guitarra" usa "guitar"; para un animal, su categoría). "tamano" es la medida mayor
+  del objeto real en metros (un tiburón 2.5, una guitarra 1.0, una taza 0.12). Los modelos se apoyan solos en el piso (y = 0).
+- PROHIBIDO armar con formas simples algo orgánico o reconocible: partes del cuerpo (dedos, manos, ojos, dientes), personas,
+  animales, comida, plantas, vehículos. Si no hay categoría para eso, muestra otro objeto REAL de la lista que cuente la
+  misma idea (para "tus dedos en el agua" usa "bathtub", "faucet" o "towel"), o usa una escena de ilustración.
+  Una escena hecha solo de formas simples se elimina automáticamente.
+- Formas simples ("forma": caja, cilindro, cono, esfera, toro, capsula, engrane, resorte, tubo, plano) SOLO para piezas que
+  no existan en la lista o para señalar algo (un piso, una base, un corte, un engrane escondido), con "color" y opcional
+  "material" (metal, madera, plastico, vidrio, brillo, luz).
+- Pocos objetos por escena (1 a 4) y bien acomodados: que no se encimen. Distancia entre objetos acorde a su tamaño.
+- "camara": 2 a 4 puntos con "t" de 0 a 1. Siempre se mueve: abre amplio y se acerca al detalle, o rodea el objeto.
+  Distancia de la cámara de 1.5 a 3 veces el tamaño del objeto. "mira" al centro del detalle (a media altura del objeto).
+- "animar": "girar" [x,y,z] grados, "mover" [x,y,z], "escala", "aparece": true, "desaparece": true, "girar_siempre", "rebote".
+- Escenas seguidas pueden repetir el set con otra cámara (como cortes de cámara del mismo lugar).
+- "etiquetas" de 1 a 2 palabras y "flechas" para señalar la pieza que explica la voz.
+
+ESCENA ILUSTRACION (10 a 20 por ciento, para ideas abstractas)
+{"desde": "palabras exactas", "tipo": "ilustracion", "motivo": "reloj", "titulo": "máximo 5 palabras"}
+Motivos: muralla, barco, tratado, ejercito, ciudad, tren, avion, montanas, rio, corona, bandera, batalla, multitud, reloj, puente,
+brujula, frontera, libro, fuego, dinero.
+
+REGLAS GENERALES
+- La primera escena no lleva "desde" y es 3D con el objeto del gancho.
+- Todo "desde" copia 2 a 3 palabras que aparecen tal cual en el guion, en orden.
+- Nunca dos ilustraciones seguidas. JSON compacto, números con máximo 2 decimales.
+
+Responde SOLO con JSON {"escenas": [ ... ]}
+"""
+
+
+def _llamar(cliente, sistema, contenido, max_tokens, buscar=False):
+    params = dict(model=MODELO, max_tokens=max_tokens, messages=[{"role": "user", "content": contenido}],
+                  system=[{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}])
+    if buscar:
+        params["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}]
+    with cliente.messages.stream(**params) as flujo:
+        r = flujo.get_final_message()
+    texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+    i = texto.find("{")
+    if i < 0:
+        raise ValueError(f"La IA no devolvió el formato esperado (motivo {r.stop_reason}). Intenta de nuevo.")
+    datos = json.loads(repair_json(texto[i:]))
+    if not isinstance(datos, dict):
+        raise ValueError("La IA no devolvió el formato esperado. Intenta de nuevo.")
+    return datos
+
+
+def escribir_curiosidad(tema, api_key=None, estilo_texto="", aviso=lambda *a: None):
+    """Tres pasos: esqueleto y guion (con búsqueda), auditoría Zepfilms que reescribe, y dirección 3D con modelos reales."""
+    cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
+    base = _llamar(cliente, PASO_GUION, f"Tema del video: {tema}\n\n{estilo_texto}".strip(), 6000, buscar=True)
+    if not base.get("guion"):
+        raise ValueError("El guionista no devolvió el guion. Intenta de nuevo.")
+    aviso("Auditando el guion")
+    try:
+        aud = _llamar(cliente, PASO_AUDITORIA, json.dumps({"esqueleto": base.get("esqueleto"), "guion": base["guion"]}, ensure_ascii=False), 3000)
+        if aud.get("guion") and 80 <= len(aud["guion"].split()) <= 190:
+            base["guion_original"] = base["guion"]
+            base["guion"] = aud["guion"]
+        base["auditoria"] = {k: aud.get(k) for k in ("calificacion", "problemas", "funciona")}
+    except Exception as err:
+        base["auditoria"] = {"error": str(err)[:200]}
+    aviso("Dirigiendo las escenas 3D")
+    try:
+        from . import catalogo
+        cats = catalogo.categorias()
+    except Exception:
+        cats = []
+    lista = ("CATEGORÍAS DISPONIBLES PARA \"catalogo\": " + ", ".join(cats)) if cats else \
+        "El catálogo de modelos todavía se está preparando: no uses \"catalogo\", arma los objetos con formas simples bien proporcionadas."
+    dire = _llamar(cliente, PASO_DIRECCION, f"{lista}\n\nESQUELETO\n{json.dumps(base.get('esqueleto'), ensure_ascii=False)}\n\nGUION FINAL\n{base['guion']}", 16000)
+    escenas = dire.get("escenas") or []
+    if len(escenas) < 4:
+        raise ValueError("El director no armó suficientes escenas. Intenta de nuevo.")
+    spec = dict(base, escenas=escenas, formato="vertical", modo="curiosidades", latitud_media=30)
+    return spec
+
+
+def auditar_texto(texto, api_key=None):
+    """Para el comando /auditar: diagnóstico Zepfilms de cualquier guion que pegue el dueño, con la versión reescrita."""
+    cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
+    return _llamar(cliente, PASO_AUDITORIA, json.dumps({"esqueleto": None, "guion": texto}, ensure_ascii=False), 3000)
+
+
+def esqueleto(tema, api_key=None):
+    """Para el comando /esqueleto: solo la escaleta y el guion, sin hacer video."""
+    cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
+    return _llamar(cliente, PASO_GUION, f"Tema del video: {tema}", 6000, buscar=True)

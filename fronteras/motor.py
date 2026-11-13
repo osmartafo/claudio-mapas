@@ -36,6 +36,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATOS = f"{RAIZ}/assets/datos"
 FUENTES = f"{RAIZ}/assets/fuentes"
 FPS = 30
+FPS_3D = 15  # las escenas 3D se dibujan a 15 cuadros por segundo (la mitad de trabajo) y cada cuadro se repite
 
 # ---------------- identidad FRONTERAS ----------------
 NOCHE = "#07090C"
@@ -367,6 +368,8 @@ class Short:
     def preparar_3d(self, carpeta, aviso=None):
         """Dibuja de antemano los cuadros de cada escena 3D. Si falla, esa escena pasa a tarjeta ilustrada."""
         trabajos = []
+        self.creditos = getattr(self, "creditos", [])
+        self._resolver_catalogo()
         for i, e in enumerate(self.escenas):
             if e.get("tipo") == "3d" and isinstance(e.get("modelo"), dict):
                 dur = e["_t1"] - e["_t0"] + 0.15
@@ -376,7 +379,7 @@ class Short:
             return
         try:
             from . import tres
-            tres.render_paralelo([(m, d, c) for m, d, c, _ in trabajos], aviso=aviso)
+            tres.render_paralelo([(m, d, c) for m, d, c, _ in trabajos], ancho=608, alto=1080, fps=FPS_3D, aviso=aviso)
             for _, d, destino, e in trabajos:
                 e["_cuadros"] = destino
                 e["_n"] = len([f for f in os.listdir(destino) if f.endswith(".jpg")])
@@ -385,6 +388,74 @@ class Short:
             for _, _, _, e in trabajos:
                 e["tipo"] = "ilustracion"
                 e.setdefault("broll", {"motivo": e.get("motivo", "libro")})
+            self._resolver_broll()
+
+    def _resolver_catalogo(self):
+        """Cambia cada {"catalogo": "shark"} por el archivo de un modelo 3D real, y junta los créditos de los autores."""
+        from . import catalogo
+        import shutil
+        destino_js = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "tres", "modelos")
+        os.makedirs(destino_js, exist_ok=True)
+        elegidos = {}
+        for e in self.escenas:
+            for o in ((e.get("modelo") or {}).get("objetos") or []) if e.get("tipo") == "3d" else []:
+                cat = o.get("catalogo")
+                if not cat or o.get("archivo"):
+                    continue
+                if cat not in elegidos:
+                    try:
+                        elegidos[cat] = catalogo.obtener(cat)
+                    except Exception as err:
+                        print("catálogo:", err)
+                        elegidos[cat] = None
+                r = elegidos[cat]
+                if not r:
+                    o["_sin_modelo"] = True  # nunca se inventa con figuras: el objeto se quita abajo
+                    continue
+                ruta, credito, uid = r
+                local = os.path.join(destino_js, uid + ".glb")
+                if not os.path.exists(local):
+                    try:
+                        os.symlink(ruta, local)
+                    except Exception:
+                        shutil.copy(ruta, local)
+                o["archivo"] = f"modelos/{uid}.glb"
+                if credito not in self.creditos:
+                    self.creditos.append(credito)
+        self._sin_figuras(bool(catalogo.indice()))
+
+    def _sin_figuras(self, hay_catalogo):
+        """Una escena 3D solo se queda si tiene al menos un modelo real. Las figuras simples (cilindros, esferas)
+        solo acompañan, nunca hacen de dedo, animal o persona. Si falta el modelo, la escena repite el set real
+        anterior con otra cámara, o pasa a ilustración."""
+        anterior = None
+        for e in self.escenas:
+            if e.get("tipo") != "3d" or not isinstance(e.get("modelo"), dict):
+                continue
+            m = e["modelo"]
+            objs = [o for o in (m.get("objetos") or []) if not o.get("_sin_modelo")]
+            reales = [o for o in objs if o.get("archivo")]
+            if reales or not hay_catalogo and objs and not any(o.get("_sin_modelo") for o in m.get("objetos") or []):
+                m["objetos"] = objs
+                ids = {o.get("id") for o in objs}
+                if isinstance(m.get("animar"), list):
+                    m["animar"] = [a for a in m["animar"] if a.get("id") in ids]
+                if reales:
+                    anterior = m
+                continue
+            if anterior is not None:
+                m["objetos"] = [dict(o) for o in anterior["objetos"]]
+                m["animar"] = [dict(a) for a in anterior.get("animar") or []]
+                m["etiquetas"], m["flechas"] = [], []
+                for k in ("fondo_cine", "suelo_cine"):
+                    if k in anterior:
+                        m[k] = anterior[k]
+                if not m.get("camara") or m.get("camara") == anterior.get("camara"):
+                    m["camara"] = [{"t": 0, "pos": [-3.2, 1.6, 3.0], "mira": [0, 0.5, 0]}, {"t": 1, "pos": [-1.9, 1.1, 2.0], "mira": [0, 0.5, 0]}]
+            else:
+                e["tipo"] = "ilustracion"
+                e.setdefault("broll", {"motivo": e.get("motivo", "libro")})
+        if any(e.get("tipo") == "ilustracion" for e in self.escenas):
             self._resolver_broll()
 
     def _resolver_broll(self):
@@ -409,7 +480,7 @@ class Short:
         n = e.get("_n", 0)
         if not n:
             return False
-        i = int(clamp(round((t - e["_t0"]) * FPS), 0, n - 1))
+        i = int(clamp(round((t - e["_t0"]) * FPS_3D), 0, n - 1))
         img = skia.Image.open(os.path.join(e["_cuadros"], f"c{i:05d}.jpg"))
         c.drawImageRect(img, skia.Rect(0, 0, self.W, self.H), skia.SamplingOptions(skia.FilterMode.kLinear))
         return True
@@ -693,7 +764,8 @@ class Short:
         grupos, act = [], []
         for w in pal:
             act.append(w)
-            if len(act) >= 4 or len(" ".join(x["p"] for x in act)) > 20 or w["p"][-1] in ",.:?!;":
+            arriba = getattr(self, "_subs_arriba", False)  # 3D: frases cortas y letra grande, como la referencia
+            if len(act) >= (3 if arriba else 4) or len(" ".join(x["p"] for x in act)) > (15 if arriba else 20) or w["p"][-1] in ",.:?!;":
                 grupos.append(act)
                 act = []
         if act:
@@ -701,7 +773,7 @@ class Short:
         for i, g in enumerate(grupos):
             fin = grupos[i + 1][0]["t0"] if i + 1 < len(grupos) else g[-1]["t1"] + 0.6
             if g[0]["t0"] - 0.05 <= t < fin:
-                tam = 52 if self.vertical else 44
+                tam = (84 if getattr(self, "_subs_arriba", False) else 52) if self.vertical else 44
                 ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
                 if self.graf["mayusculas"]:
                     ps = [p.upper() for p in ps]
@@ -714,7 +786,7 @@ class Short:
                         break
                     tam -= 2
                 x = self.W / 2 - total / 2
-                y = 1505 if self.vertical else 975
+                y = (360 if getattr(self, "_subs_arriba", False) else 1505) if self.vertical else 975
                 a = rampa(t, g[0]["t0"] - 0.05, 0.12)
                 if self.L.get("sub_banda"):  # banda oscura detrás de la frase, para mapas claros
                     c.drawRoundRect(skia.Rect.MakeXYWH(x - tam * 0.45, y - tam * 1.0, total + tam * 0.9, tam * 1.38), 16, 16,
@@ -723,6 +795,8 @@ class Short:
                     dicha = t >= w["t0"] - 0.03
                     ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
                     modo = self.graf["subtitulo"]
+                    if getattr(self, "_subs_arriba", False):  # 3D: todo en blanco sólido, como la referencia
+                        modo, dicha = "", True
                     if ahora and modo == "caja":
                         c.drawRoundRect(skia.Rect.MakeXYWH(x - tam * 0.18, y - tam * 0.86, an + tam * 0.36, tam * 1.1), 10, 10,
                                         skia.Paint(AntiAlias=True, Color4f=col(ORO, a)))
@@ -859,18 +933,20 @@ class Short:
         e_act = self.escena_en(t)
         if e_act.get("tipo") == "3d" and e_act.get("_n"):
             guardado = (MARFIL, CONTORNO, SOMBRA_K)
-            MARFIL, CONTORNO, SOMBRA_K = "#FFFFFF", "#111111", 0.0
+            MARFIL, CONTORNO, SOMBRA_K = "#FFFFFF", None, 1.6  # como la referencia: letra blanca grande con sombra suave
+            self._subs_arriba = True
             try:
                 self._cuadro_3d(c, e_act, t)
                 self._destello(c, t)
                 if e_act["_t0"] - 0.1 <= t < e_act["_t1"] + 0.6:
-                    self._titulos(c, t, e_act)
+                    self._titulos(c, t, {k: v for k, v in e_act.items() if k not in ("titulo", "año")})
                 if t < self.T_FIN:
                     self._subtitulos(c, t)
                 self._marca(c, t)
                 self._cierre(c, t)
             finally:
                 MARFIL, CONTORNO, SOMBRA_K = guardado
+                self._subs_arriba = False
             return
         m, s = self.matriz(t)
         from . import looks as _lk

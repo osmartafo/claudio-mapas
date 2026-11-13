@@ -2,14 +2,60 @@
 <html><head><meta charset="utf-8">
 <style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
 </head><body>
+<script type="importmap">{"imports": {"three": "./three.module.min.js", "three/addons/": "./addons/"}}</script>
 <script type="module">
-import * as THREE from './three.module.min.js';
+import * as THREE from 'three';
 import { OutlineEffect } from './OutlineEffect.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Escena 3D estilo caricatura: sombreado en bandas, contorno negro, colores planos.
 // window.preparar(def, ancho, alto) arma la escena; window.cuadro(u) la dibuja en el instante u (0..1) y devuelve un JPEG.
 const R = THREE.MathUtils.degToRad;
 let renderer, efecto, escena, camara, def, objetos = {}, base = {}, sprites = [], flechas = [];
+let cine = true, compositor = null, bokeh = null, grano = null;
+
+// materiales de cine: cada objeto puede decir de qué está hecho
+const MATERIALES = {
+  metal: { roughness: 0.28, metalness: 1.0 }, cromo: { roughness: 0.08, metalness: 1.0 },
+  plastico: { roughness: 0.42, metalness: 0.0 }, madera: { roughness: 0.75, metalness: 0.0 },
+  vidrio: { roughness: 0.02, metalness: 0.0, transparent: true, opacity: 0.35, clearcoat: 1.0 },
+  tela: { roughness: 0.95, metalness: 0.0, sheen: 1.0 }, brillo: { roughness: 0.15, metalness: 0.0, clearcoat: 1.0 },
+  luz: { roughness: 0.5, metalness: 0.0, emissiveIntensity: 1.1 }, piedra: { roughness: 0.9, metalness: 0.0 },
+};
+function materialCine(o) {
+  const t = MATERIALES[o.material] || (/^#(C|D|E)[0-9A-F]C[0-9A-F]C[0-9A-F]/i.test(o.color || '') ? MATERIALES.metal : MATERIALES.plastico);
+  const p = Object.assign({ color: new THREE.Color(o.color || '#dddddd') }, t);
+  if (o.material === 'luz') p.emissive = new THREE.Color(o.color || '#FFD9A0');
+  if (o.transparente) Object.assign(p, { transparent: true, opacity: 0.45 });
+  return new THREE.MeshPhysicalMaterial(p);
+}
+
+// grano de película, viñeta y un toque cálido
+const GradoCine = {
+  uniforms: { tDiffuse: { value: null }, tiempo: { value: 0 }, grano: { value: 0.06 }, vineta: { value: 0.9 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float tiempo; uniform float grano; uniform float vineta; varying vec2 vUv;
+    float az(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + tiempo*43.0) * 43758.5453); }
+    void main(){ vec4 c = texture2D(tDiffuse, vUv);
+      c.rgb = mix(c.rgb, c.rgb * vec3(1.06, 1.0, 0.9), 0.6);
+      float d = distance(vUv, vec2(0.5)); c.rgb *= mix(1.0, smoothstep(0.85, 0.25, d), vineta * 0.55);
+      c.rgb += (az(vUv * 1000.0) - 0.5) * grano;
+      gl_FragColor = c; }`,
+};
+
+function persianas() {  // luz que entra por una persiana, como en las tomas de atardecer
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#fff';
+  for (let i = 0; i < 9; i++) x.fillRect(0, 14 + i * 26, 256, 15);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
 
 const bandas = (() => {
   const d = new Uint8Array([90, 170, 255]);
@@ -80,31 +126,61 @@ function texto(t, color = '#111111', fondo = '#ffffff') {
 const suave = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
 const rebote = u => { if (u <= 0) return 0; if (u >= 1) return 1; const c = 1.70158 + 1; return 1 + c * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2); };
 
-window.preparar = (d, ancho, alto) => {
-  def = d;
+window.preparar = async (d, ancho, alto) => {
+  def = d; cine = (d.estilo || 'cine') !== 'caricatura';
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1); renderer.setSize(ancho, alto);
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.enabled = !d.sin_sombras; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   document.body.appendChild(renderer.domElement);
   efecto = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.07, 0.07, 0.07] });
   escena = new THREE.Scene();
-  escena.background = new THREE.Color(d.fondo || '#BFE6F7');
-  camara = new THREE.PerspectiveCamera(d.lente || 38, ancho / alto, 0.05, 400);
-  escena.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
-  const sol = new THREE.DirectionalLight(0xffffff, 2.2);
+  escena.background = new THREE.Color(cine ? (d.fondo_cine || '#17110C') : (d.fondo || '#BFE6F7'));
+  camara = new THREE.PerspectiveCamera(d.lente || (cine ? 32 : 38), ancho / alto, 0.05, 400);
+  if (cine) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = d.exposicion || 0.9;
+    const pm = new THREE.PMREMGenerator(renderer);
+    escena.environment = pm.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    escena.environmentIntensity = 0.35;
+    escena.fog = new THREE.FogExp2(escena.background.getHex(), 0.035);
+    escena.add(new THREE.HemisphereLight(0x8fa7c8, 0x2a1a10, 0.35));
+  } else {
+    escena.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
+  }
+  const sol = new THREE.DirectionalLight(cine ? 0xFFC48A : 0xffffff, cine ? 2.4 : 2.2);
   sol.position.set(6, 12, 8); sol.castShadow = true;
   sol.shadow.mapSize.set(2048, 2048);
   sol.shadow.bias = -0.0015; sol.shadow.normalBias = 0.03;
   escena.add(sol); escena.add(sol.target);
   if (d.suelo !== null && d.suelo !== false) {
-    const suelo = new THREE.Mesh(new THREE.CircleGeometry(60, 64), material(d.suelo || '#9BD36A'));
+    const suelo = new THREE.Mesh(new THREE.CircleGeometry(60, 64),
+      cine ? new THREE.MeshStandardMaterial({ color: new THREE.Color(d.suelo_cine || '#3A2C22'), roughness: 0.85 }) : material(d.suelo || '#9BD36A'));
     suelo.rotation.x = -Math.PI / 2; suelo.position.y = d.altura_suelo || 0; suelo.receiveShadow = true;
     suelo.userData.outlineParameters = { visible: false };
     escena.add(suelo);
   }
+  const cargador = new GLTFLoader();
   for (const o of d.objetos || []) {
-    const m = new THREE.Mesh(geometria(o), material(o.color, o.transparente ? { transparent: true, opacity: 0.45 } : {}));
+    if (o.archivo) {  // modelo 3D real del catálogo: se escala a su tamaño en metros y se apoya en el piso
+      try {
+        const gltf = await cargador.loadAsync(o.archivo);
+        const mod = gltf.scene;
+        mod.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; if (n.material) n.material.side = THREE.DoubleSide; } });
+        const caja0 = new THREE.Box3().setFromObject(mod), tam0 = caja0.getSize(new THREE.Vector3());
+        const k = (o.tamano || 1) / Math.max(tam0.x, tam0.y, tam0.z, 1e-6);
+        mod.scale.setScalar(k);
+        const caja1 = new THREE.Box3().setFromObject(mod), c1 = caja1.getCenter(new THREE.Vector3());
+        mod.position.set(-c1.x, -caja1.min.y, -c1.z);
+        const g = new THREE.Group(); g.add(mod);
+        g.position.set(...(o.pos || [0, 0, 0]));
+        const r = o.rot || [0, 0, 0]; g.rotation.set(R(r[0]), R(r[1]), R(r[2]));
+        objetos[o.id] = g;
+        base[o.id] = { pos: g.position.clone(), rot: g.rotation.clone(), escala: 1, color: null, malla: null };
+        (o.padre && objetos[o.padre] ? objetos[o.padre] : escena).add(g);
+        continue;
+      } catch (err) { console.log('modelo no cargó', o.archivo, err); }
+    }
+    const m = new THREE.Mesh(geometria(o), cine ? materialCine(o) : material(o.color, o.transparente ? { transparent: true, opacity: 0.45 } : {}));
     m.castShadow = true; m.receiveShadow = true;
     const g = new THREE.Group(); g.add(m);
     g.position.set(...(o.pos || [0, 0, 0]));
@@ -123,6 +199,21 @@ window.preparar = (d, ancho, alto) => {
     sol.position.copy(centro).add(new THREE.Vector3(0.45, 1, 0.6).normalize().multiplyScalar(radio * 3));
     const cs = sol.shadow.camera; cs.left = cs.bottom = -radio; cs.right = cs.top = radio; cs.near = 0.1; cs.far = radio * 6;
     cs.updateProjectionMatrix();
+  }
+  if (cine) {
+    // sol bajo y cálido entrando por una persiana, más la luz principal suave
+    sol.shadow.radius = 6; sol.shadow.blurSamples = 12;
+    const centro = sol.target.position.clone();
+    const rayo = new THREE.SpotLight(0xFFC27A, 22, 0, Math.PI / 7, 0.4, 1.2);
+    rayo.position.copy(centro).add(new THREE.Vector3(-6, 5, 3)); rayo.target.position.copy(centro);
+    rayo.map = persianas(); rayo.castShadow = !d.sin_sombra_rayo; rayo.shadow.mapSize.set(1024, 1024); rayo.shadow.bias = -0.001;
+    escena.add(rayo); escena.add(rayo.target);
+    compositor = new EffectComposer(renderer);
+    compositor.addPass(new RenderPass(escena, camara));
+    if (d.desenfoque) { bokeh = new BokehPass(escena, camara, { focus: 5, aperture: d.desenfoque, maxblur: 0.006 }); compositor.addPass(bokeh); }
+    compositor.addPass(new UnrealBloomPass(new THREE.Vector2(ancho / 4, alto / 4), 0.3, 0.5, 0.9));
+    grano = new ShaderPass(GradoCine); compositor.addPass(grano);
+    compositor.addPass(new OutputPass());
   }
   for (const e of d.etiquetas || []) {
     const s = texto(e.texto, e.color || '#111111', e.fondo || '#ffffff');
@@ -146,13 +237,14 @@ function camaraEn(u) {
   // vaivén leve para que la toma nunca quede quieta
   p.x += Math.sin(u * Math.PI * 2) * 0.08; p.y += Math.cos(u * Math.PI * 2) * 0.05;
   camara.position.copy(p); camara.lookAt(m);
+  if (bokeh) bokeh.uniforms.focus.value = p.distanceTo(m);
 }
 
 window.cuadro = (u) => {
   for (const id in objetos) {
     const g = objetos[id], b = base[id]; if (!b) continue;
     g.position.copy(b.pos); g.rotation.copy(b.rot); g.scale.setScalar(b.escala); g.visible = true;
-    b.malla.material.color.copy(b.color);
+    if (b.malla) b.malla.material.color.copy(b.color);
   }
   for (const an of def.animar || []) {
     const g = objetos[an.id], b = base[an.id]; if (!g) continue;
@@ -164,7 +256,7 @@ window.cuadro = (u) => {
     if (an.aparece) { if (u < t0) g.visible = false; else g.scale.setScalar(b.escala * Math.max(0.001, rebote(Math.min(1, (u - t0) / Math.max(0.05, t1 - t0))))); }
     if (an.desaparece && u > t1) g.visible = false;
     if (an.escala) g.scale.setScalar(b.escala * (1 + (an.escala - 1) * k));
-    if (an.resaltar && u >= t0 && u <= t1 + 0.15) {
+    if (an.resaltar && b.malla && u >= t0 && u <= t1 + 0.15) {
       const p = 0.5 + 0.5 * Math.sin((u - t0) * 40);
       b.malla.material.color.copy(b.color).lerp(new THREE.Color(an.color || '#FFD23F'), 0.35 + 0.45 * p);
     }
@@ -178,7 +270,7 @@ window.cuadro = (u) => {
     fl.setLength(Math.max(0.01, largo * k), Math.min(0.5, largo * 0.3), Math.min(0.3, largo * 0.18));
   }
   camaraEn(u);
-  efecto.render(escena, camara);
+  if (compositor && !def.sin_post) { grano.uniforms.tiempo.value = u; compositor.render(); } else if (cine) renderer.render(escena, camara); else efecto.render(escena, camara);
   return renderer.domElement.toDataURL('image/jpeg', 0.9);
 };
 window.listo = true;

@@ -2,7 +2,7 @@
 
 Platica contigo por texto o nota de voz, te propone ideas como botones y produce los videos.
 """
-import asyncio, html, logging, os, time
+import asyncio, json, html, logging, os, time
 
 from telegram import (Update, InlineKeyboardButton as Boton, InlineKeyboardMarkup as Botones,
                       ReplyKeyboardMarkup, BotCommand)
@@ -10,7 +10,7 @@ from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from .fabrica import hacer_video
-from . import youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok, marca
+from . import guionista, youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok, marca
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # no imprimir el token del bot en los registros
@@ -127,7 +127,7 @@ def botones_video(n):
     if redes:
         filas.append(redes)
     filas.append([Boton("📋 Texto para YouTube", callback_data=f"txt:{n}"), Boton("🔁 Otra versión", callback_data=f"otra:{n}")])
-    filas.append([Boton("🎨 Mismo video, otro look", callback_data=f"look:{n}")])
+    filas.append([Boton("🎨 Mismo video, otro look", callback_data=f"look:{n}"), Boton("📝 Guion y auditoría", callback_data=f"aud:{n}")])
     filas.append([Boton("💡 Más ideas", callback_data="mas")])
     return Botones(filas)
 
@@ -670,6 +670,19 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.answer("Listo")
         nombre = "📱 Vertical 9:16" if valor == "vertical" else "🖥️ Horizontal 16:9"
         await q.edit_message_text(f"📐 Los siguientes videos salen en <b>{nombre}</b>", parse_mode=ParseMode.HTML)
+    elif accion == "aud":
+        await q.answer()
+        n = int(valor)
+        if n not in hechos:
+            await q.message.reply_text("🔄 Ese video es de antes de una actualización.")
+            return
+        ruta = os.path.join(os.path.dirname(hechos[n][0]), "spec.json")
+        try:
+            spec = json.load(open(ruta))
+        except Exception:
+            await q.message.reply_text("No encontré el guion de ese video.")
+            return
+        await q.message.reply_text(texto_auditoria(spec), parse_mode=ParseMode.HTML)
     elif accion == "est":
         clave, _, val = valor.partition(":")
         ajustes.fijar_estilo(chat, clave, val)
@@ -843,6 +856,8 @@ async def al_arrancar(app: Application):
         BotCommand("estado", "Qué estoy haciendo"),
         BotCommand("youtube", "Conectar el canal de YouTube"),
         BotCommand("tiktok", "Conectar TikTok"),
+        BotCommand("esqueleto", "Escaleta y guion de un tema, sin hacer video"),
+        BotCommand("auditar", "Auditar un guion que pegues"),
         BotCommand("ayuda", "Cómo usarme"),
     ])
     try:
@@ -851,6 +866,65 @@ async def al_arrancar(app: Application):
                                          "y te regreso un short animado en 3D o con mapas, con voz y música, listo para publicar.")
     except Exception:
         logging.exception("descripción")
+
+
+def texto_auditoria(spec):
+    es = spec.get("esqueleto") or {}
+    au = spec.get("auditoria") or {}
+    partes = ["<b>📝 Esqueleto del guion</b>"]
+    for k, nombre in (("premisa", "Premisa"), ("gancho", "Gancho"), ("promesa", "Promesa"), ("giro", "Giro"),
+                      ("remate", "Remate"), ("siembra", "Siembra y cosecha"), ("cierre", "Cierre en bucle")):
+        if es.get(k):
+            partes.append(f"<b>{nombre}</b>  {e(str(es[k]))}")
+    if es.get("pasos"):
+        partes.append("<b>Pasos</b>  " + e(" → ".join(map(str, es["pasos"]))))
+    if au.get("calificacion") is not None:
+        partes.append(f"\n<b>🩺 Auditoría</b>  borrador {e(str(au.get('calificacion')))}/10")
+        for p_ in (au.get("problemas") or [])[:6]:
+            partes.append(f"❌ {e(str(p_))}")
+        for p_ in (au.get("funciona") or [])[:3]:
+            partes.append(f"✅ {e(str(p_))}")
+    if spec.get("guion"):
+        partes.append(f"\n<b>Guion final</b>\n<i>{e(spec['guion'])}</i>")
+    if len(partes) == 1:
+        partes.append("Este video es de antes de que el bot armara esqueleto y auditoría.")
+    return "\n".join(partes)[:4000]
+
+
+async def cmd_esqueleto(update, ctx):
+    """/esqueleto tema: arma escaleta y guion con el método Zepfilms, sin hacer video ni gastar en voz."""
+    if not autorizado(update):
+        return
+    tema = " ".join(ctx.args)
+    if not tema:
+        await update.message.reply_text("Escríbeme el tema después del comando. Ejemplo\n/esqueleto Por qué las teclas F y J tienen una rayita")
+        return
+    aviso = await update.message.reply_text("📝 Armando el esqueleto y auditándolo…")
+    try:
+        base = await asyncio.to_thread(guionista.esqueleto, tema)
+        aud = await asyncio.to_thread(guionista.auditar_texto, base.get("guion", ""))
+        spec = dict(base, guion=aud.get("guion") or base.get("guion"), auditoria=aud)
+        await aviso.edit_text(texto_auditoria(spec), parse_mode=ParseMode.HTML)
+    except Exception as err:
+        logging.exception("esqueleto")
+        await aviso.edit_text(explica(err), parse_mode=ParseMode.HTML)
+
+
+async def cmd_auditar(update, ctx):
+    """/auditar + guion pegado: diagnóstico Zepfilms y versión reescrita."""
+    if not autorizado(update):
+        return
+    texto = update.message.text.partition(" ")[2].strip()
+    if len(texto.split()) < 15:
+        await update.message.reply_text("Pégame el guion después del comando. Ejemplo\n/auditar Esa tapita de tu guitarra no está de adorno…")
+        return
+    aviso = await update.message.reply_text("🩺 Auditando con el método Zepfilms…")
+    try:
+        aud = await asyncio.to_thread(guionista.auditar_texto, texto)
+        await aviso.edit_text(texto_auditoria({"auditoria": aud, "guion": aud.get("guion")}), parse_mode=ParseMode.HTML)
+    except Exception as err:
+        logging.exception("auditar")
+        await aviso.edit_text(explica(err), parse_mode=ParseMode.HTML)
 
 
 async def cmd_tiktok(update, ctx):
@@ -878,6 +952,11 @@ async def cmd_piloto(update, ctx):
 
 def main():
     monitor.arrancar()
+    try:
+        from . import catalogo
+        catalogo.preparar_en_segundo_plano()  # índice de modelos 3D reales; la primera vez tarda unos minutos
+    except Exception as err:
+        print("catálogo 3D:", err)
     # tiempos largos: subir un video de 30 MB o bajar un audio tarda más que los 5 s de fábrica
     app = (Application.builder().token(os.environ["TELEGRAM_TOKEN"]).post_init(al_arrancar)
            .connect_timeout(30).read_timeout(120).write_timeout(300).pool_timeout(60)
@@ -893,6 +972,8 @@ def main():
     app.add_handler(CommandHandler("youtube", cmd_youtube))
     app.add_handler(CommandHandler("estilo", cmd_estilo))
     app.add_handler(CommandHandler("tiktok", cmd_tiktok))
+    app.add_handler(CommandHandler("esqueleto", cmd_esqueleto))
+    app.add_handler(CommandHandler("auditar", cmd_auditar))
     app.add_handler(CommandHandler("piloto", cmd_piloto))
     app.add_handler(CallbackQueryHandler(botones))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voz))

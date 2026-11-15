@@ -98,12 +98,13 @@ class Corto(Short):
         buenas, t_prev = [], 0.0
         for i, e in enumerate(self.spec["escenas"]):
             try:
-                t0 = 0.0 if not buenas else self.voz.en(e["desde"], t_prev)
+                t0 = 0.0 if not buenas else self.voz.corte(e["desde"], t_prev)
             except (ValueError, KeyError):
                 continue
             t_prev = t0
             buenas.append(dict(e, _t0=t0, camara=[0, 0, 100]))
-        self.escenas = buenas or [{"tipo": "pantalla", "_t0": 0.0, "camara": [0, 0, 100]}]
+        from .motor import _sin_relampagos
+        self.escenas = _sin_relampagos(buenas) or [{"tipo": "pantalla", "_t0": 0.0, "camara": [0, 0, 100]}]
         for i, e in enumerate(self.escenas):
             e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else self.voz.duracion + 0.6
 

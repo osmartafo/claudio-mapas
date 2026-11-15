@@ -153,6 +153,7 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     video = short.render(salida_video, voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav", sfx_wav=fx,
                          progreso=lambda f: aviso(4, "Armando el video", f))
 
+    revisar_final(video, short.duracion, getattr(short, "T_FIN", None))
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
     if getattr(short, "creditos", None):
         texto += "\n\nModelos 3D (Objaverse, Sketchfab)\n" + "\n".join(short.creditos)
@@ -164,6 +165,42 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
         texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de " + marca.NOMBRE.title() + "."
     open(f"{carpeta}/descripcion.txt", "w").write(texto)
     return video, texto
+
+
+def revisar_final(video, duracion, hasta=None):
+    """Revisión medida del video terminado (lo que el ojo no ve): largo, audio, volumen y tramos negros.
+    Lo que falle queda anotado en el registro de errores para la revisión automática cada 48 horas."""
+    import subprocess
+    problemas = []
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", video],
+                           capture_output=True, text=True, timeout=60)
+        d = json.loads(r.stdout)
+        dur = float(d["format"]["duration"])
+        if abs(dur - duracion) > 1.0:
+            problemas.append(f"dura {dur:.1f} s y debía durar {duracion:.1f} s")
+        if "audio" not in {x["codec_type"] for x in d.get("streams", [])}:
+            problemas.append("no tiene audio")
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-t", f"{hasta or duracion:.2f}", "-i", video, "-vf", "blackdetect=d=1.5:pix_th=0.06",
+                            "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True, timeout=600)
+        negros = [l for l in r.stderr.splitlines() if "black_start" in l]
+        if negros:
+            problemas.append(f"{len(negros)} tramos negros de más de 1.5 s")
+        lufs = [l for l in r.stderr.splitlines() if l.strip().startswith("I:")]
+        if lufs:
+            valor = float(lufs[-1].split()[1])
+            if abs(valor + 14) > 2.5:
+                problemas.append(f"volumen {valor} LUFS (meta -14)")
+    except Exception as err:
+        problemas.append(f"no se pudo revisar: {err}")
+    if problemas:
+        try:
+            from . import monitor
+            monitor.registrar("revision_video", "; ".join(problemas), video)
+        except Exception:
+            pass
+        print("Revisión del video:", "; ".join(problemas))
+    return problemas
 
 
 def _limpia(spec, v):

@@ -107,6 +107,13 @@ class Voz:
                 return self.palabras[i]["t0"]
         raise ValueError(f"La voz no dice «{frase}»")
 
+    def corte(self, frase, desde_t=0.0):
+        """Segundo del corte de una escena: cae en la pausa antes de la frase (hasta 0.25 s antes de la palabra),
+        así la toma nueva llega un pelo antes de que se diga y la anterior termina su respiro."""
+        t = self.en(frase, desde_t)
+        prev = max((w["t1"] for w in self.palabras if w["t1"] <= t + 1e-3), default=0.0)
+        return round(max(prev + 0.04, t - 0.25, desde_t), 3)
+
 
 # ---------------- geografía ----------------
 def _path(geo, K):
@@ -269,6 +276,41 @@ def aplicar_paleta(clave):
     return pal
 
 
+def _ajuste_luz(carpeta):
+    """Mira tres cuadros de la toma: si está quemada regresa un factor para bajar la exposición, si está negra uno
+    para subirla, y None si está bien."""
+    try:
+        from PIL import Image
+        cuadros = sorted(f for f in os.listdir(carpeta) if f.endswith(".jpg"))
+        if not cuadros:
+            return None
+        muestras = [cuadros[0], cuadros[len(cuadros) // 2], cuadros[-1]]
+        medias, quemado = [], []
+        for f in muestras:
+            g = np.asarray(Image.open(os.path.join(carpeta, f)).convert("L").resize((76, 135)), dtype=np.float32) / 255
+            medias.append(g.mean())
+            quemado.append((g > 0.94).mean())
+        media, q = float(np.mean(medias)), float(np.mean(quemado))
+        if q > 0.12 or media > 0.68:
+            return 0.6
+        if media < 0.05:
+            return 1.8
+    except Exception as err:
+        print("revisión de luz:", err)
+    return None
+
+
+def _sin_relampagos(escenas, minimo=1.1):
+    """Una toma de menos de un segundo se siente como error: se junta con la anterior (la primera nunca se quita)."""
+    buenas = []
+    for i, e in enumerate(escenas):
+        sig = escenas[i + 1]["_t0"] if i + 1 < len(escenas) else None
+        if buenas and sig is not None and sig - e["_t0"] < minimo:
+            continue
+        buenas.append(e)
+    return buenas
+
+
 class Short:
     def __init__(self, spec, voz):
         self.spec, self.voz = spec, voz
@@ -330,9 +372,10 @@ class Short:
             if not (isinstance(e.get("camara"), list) and len(e["camara"]) == 3):
                 e["camara"] = list(cam)
             cam = e["camara"]
-            t0 = 0.0 if i == 0 else self.voz.en(e["desde"], t_prev)
+            t0 = 0.0 if i == 0 else self.voz.corte(e["desde"], t_prev)
             t_prev = t0
             self.escenas.append(dict(e, _t0=t0))
+        self.escenas = _sin_relampagos(self.escenas)
         for i, e in enumerate(self.escenas):
             e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else self.voz.duracion + 0.6
             for grupo in ("zonas", "etiquetas", "pines", "flechas"):
@@ -380,6 +423,19 @@ class Short:
         try:
             from . import tres
             tres.render_paralelo([(m, d, c) for m, d, c, _ in trabajos], ancho=608, alto=1080, fps=FPS_3D, aviso=aviso)
+            # revisión automática de luz: una toma quemada o negra se vuelve a dibujar con la exposición corregida
+            rehacer = []
+            for m, d, destino, e in trabajos:
+                k = _ajuste_luz(destino)
+                if k and not m.get("_reexpuesta"):
+                    m["exposicion"] = round((m.get("exposicion") or (0.9 if not m.get("ambiente") else 0.85)) * k, 3)
+                    m["_reexpuesta"] = True
+                    import shutil
+                    shutil.rmtree(destino, ignore_errors=True)
+                    rehacer.append((m, d, destino))
+            if rehacer:
+                print(f"Revisión de luz: rehago {len(rehacer)} tomas 3D")
+                tres.render_paralelo(rehacer, ancho=608, alto=1080, fps=FPS_3D)
             for _, d, destino, e in trabajos:
                 e["_cuadros"] = destino
                 e["_n"] = len([f for f in os.listdir(destino) if f.endswith(".jpg")])
@@ -1008,10 +1064,10 @@ class Short:
         if musica_wav:
             cmd += ["-i", musica_wav]
         if voz_mp3 and musica_wav and sfx_wav:
-            cmd += ["-i", sfx_wav, "-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[3:a]volume=0.32[fx];[vz2][mud][fx]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.95[aud]",
+            cmd += ["-i", sfx_wav, "-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[3:a]volume=0.32[fx];[vz2][mud][fx]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100[aud]",
                     "-map", "0:v", "-map", "[aud]"]
         elif voz_mp3 and musica_wav:
-            cmd += ["-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[vz2][mud]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[aud]",
+            cmd += ["-filter_complex", "[1:a]volume=1.0,asplit=2[vz1][vz2];[2:a]volume=0.22[mu];[mu][vz1]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[mud];[vz2][mud]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100[aud]",
                     "-map", "0:v", "-map", "[aud]"]
         elif voz_mp3 or musica_wav:
             cmd += ["-map", "0:v", "-map", "1:a"]

@@ -39,7 +39,14 @@ PALABRAS_MAPA = ("país", "pais", "frontera", "mapa", "imperio", "territorio", "
 
 
 def modo_de(tema):
-    """Curiosidades o mapas. Si el tema nombra un país o habla de fronteras e historia, va con mapas."""
+    """Curiosidades, mapas, terror o amor. Los cortos se reconocen por su prefijo o por palabras del género."""
+    bajo = tema.lower().strip()
+    if bajo.startswith(("corto de terror", "terror:", "historia de terror", "leyenda")) or \
+            any(p in bajo for p in ("corto de terror", "historia de miedo", "de terror", "leyenda urbana", "fantasma", "espanto", "aparecido")):
+        return "terror"
+    if bajo.startswith(("corto de amor", "amor:", "historia de amor")) or \
+            any(p in bajo for p in ("corto de amor", "historia de amor", "desamor", "romance", "romántic", "romantic", "corto romántico")):
+        return "amor"
     t = " " + re.sub(r"[¿?¡!.,;:]", " ", tema.lower()) + " "
     if any(p in t for p in PALABRAS_MAPA):
         return "mapas"
@@ -78,9 +85,14 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     else:
         est = estilos.elegir(forzar)
         aviso(1, f"Escribiendo con estilo {estilos.describir(est)}")
-        modo = modo or forzar.get("modo") or modo_de(tema)
+        detectado = modo_de(tema)  # un corto pedido por su nombre gana sobre el tipo fijo del menú de estilo
+        modo = modo or (detectado if detectado in ("terror", "amor") else None) or forzar.get("modo") or detectado
         aviso(1, f"Escribiendo ({'curiosidad en 3D' if modo == 'curiosidades' else 'historia con mapas'}) con estilo {estilos.describir(est)}")
-        if modo == "curiosidades":
+        if modo in ("terror", "amor"):
+            from . import guion_ficcion
+            idea = re.sub(r"^\s*corto de (terror|amor)\s*:\s*", "", tema, flags=re.I)
+            spec = guion_ficcion.escribir_ficcion(idea, modo, aviso=lambda m: aviso(1, m))
+        elif modo == "curiosidades":
             spec = guionista.escribir_curiosidad(tema, estilo_texto=estilos.instrucciones_guion(est), aviso=lambda m: aviso(1, m))
         else:
             try:
@@ -90,31 +102,41 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
                 aviso(1, "Reescribiendo como curiosidad en 3D")
                 spec = guionista.escribir_curiosidad(tema, estilo_texto=estilos.instrucciones_guion(est), aviso=lambda m: aviso(1, m))
     spec["estilo"] = est
-    spec["formato"] = "horizontal" if horizontal else "vertical"
+    spec["formato"] = "horizontal" if horizontal and spec.get("modo") not in ("terror", "amor") else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
 
     precarga = None
-    if spec.get("modo") == "curiosidades":  # los modelos 3D se bajan en paralelo mientras se graba la voz
+    if spec.get("modo") in ("curiosidades", "terror", "amor"):  # los modelos 3D se bajan en paralelo mientras se graba la voz
         import threading
         from . import catalogo
         precarga = threading.Thread(target=catalogo.precargar, args=(spec,), daemon=True)
         precarga.start()
 
-    aviso(2, "Grabando la voz")
+    ficcion = spec.get("modo") in ("terror", "amor")
+    aviso(2, "Grabando las voces de los personajes" if ficcion else "Grabando la voz")
     if not (os.path.exists(f"{carpeta}/voz.mp3") and os.path.exists(f"{carpeta}/palabras.json")):
-        voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json", voz_id=est.get("voz"))
+        if ficcion:
+            voz.generar_dialogo(spec["lineas"], spec.get("voces") or {}, f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json")
+        else:
+            voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json", voz_id=est.get("voz"))
     v = Voz.de_archivo(f"{carpeta}/palabras.json")
 
     aviso(3, "Componiendo la música")
-    musica.componer(v.duracion + 3.2, f"{carpeta}/musica.wav", semilla=int(est.get("musica", abs(hash(tema)) % 1000)))
+    musica.componer(v.duracion + (7.5 if ficcion else 3.2), f"{carpeta}/musica.wav",
+                    semilla=int(est.get("musica", abs(hash(tema)) % 1000)), animo=spec.get("modo") if ficcion else None)
 
-    aviso(4, "Animando los mapas")
-    try:
-        short = Short(spec, v)
-    except ValueError as e:  # una escena pide una palabra que la voz no dijo: se quita esa escena y se sigue
-        aviso(4, "Animando los mapas (ajusté una escena)")
-        spec["escenas"] = _limpia(spec, v)
-        short = Short(spec, v)
+    aviso(4, "Animando las escenas" if ficcion else "Animando los mapas")
+    if ficcion:
+        from .ficcion import Corto
+        short = Corto(spec, v)
+        horizontal = False
+    else:
+        try:
+            short = Short(spec, v)
+        except ValueError:  # una escena pide una palabra que la voz no dijo: se quita esa escena y se sigue
+            aviso(4, "Animando los mapas (ajusté una escena)")
+            spec["escenas"] = _limpia(spec, v)
+            short = Short(spec, v)
     if precarga:
         precarga.join(timeout=300)
     if any(e.get("tipo") == "3d" for e in short.escenas):
@@ -129,12 +151,17 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     # cada versión es un archivo propio: rehacer con otro look nunca borra las anteriores
     salida_video = f"{carpeta}/video_{est.get('look', 'noche')}_{time.strftime('%H%M%S')}.mp4"
     video = short.render(salida_video, voz_mp3=f"{carpeta}/voz.mp3", musica_wav=f"{carpeta}/musica.wav", sfx_wav=fx,
-                         progreso=lambda f: aviso(4, "Animando los mapas", f))
+                         progreso=lambda f: aviso(4, "Armando el video", f))
 
     texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nFuentes\n" + "\n".join(spec.get("fuentes", []))
     if getattr(short, "creditos", None):
         texto += "\n\nModelos 3D (Objaverse, Sketchfab)\n" + "\n".join(short.creditos)
-    texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de " + marca.NOMBRE.title() + "."
+    if ficcion:
+        texto = f"{spec.get('titulo', tema)}\n\n{spec.get('descripcion', '')}\n\nCorto animado original de {marca.NOMBRE.title()}. Historia de ficción." + \
+            (("\n\nModelos 3D (Objaverse, Sketchfab)\n" + "\n".join(short.creditos)) if getattr(short, "creditos", None) else "") + \
+            "\n\nMúsica original de " + marca.NOMBRE.title() + "."
+    else:
+        texto += "\n\nMapas de Natural Earth y NASA Blue Marble, relieve de AWS Terrain Tiles. Música original de " + marca.NOMBRE.title() + "."
     open(f"{carpeta}/descripcion.txt", "w").write(texto)
     return video, texto
 

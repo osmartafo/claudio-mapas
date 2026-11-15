@@ -103,8 +103,9 @@ def categorias():
 
 def precargar(spec):
     """Baja los modelos que pide el guion mientras se graba la voz, para no esperar después."""
-    cats = {o.get("catalogo") for e in spec.get("escenas", []) if e.get("tipo") == "3d"
-            for o in ((e.get("modelo") or {}).get("objetos") or []) if o.get("catalogo")}
+    objs = [o for e in spec.get("escenas", []) for o in ((e.get("modelo") or {}).get("objetos") or []) + (e.get("extra") or [])]
+    objs += [o for s in (spec.get("sets") or {}).values() for o in (s.get("objetos") or [])]
+    cats = {o.get("catalogo") for o in objs if isinstance(o, dict) and o.get("catalogo")}
     for c in cats:
         try:
             obtener(c)

@@ -46,8 +46,105 @@ def _reverb(x, segundos=3.2, mezcla=0.38, rng=None):
     return x * (1 - mezcla) + mojado * mezcla * 2.2
 
 
-def componer(duracion, ruta, semilla=1):
+def _guardar(izq, der, duracion, ruta):
+    t = np.arange(len(izq)) / SR
+    fade = np.minimum(1, t / 2.0) * np.clip((duracion + 3 - t) / 3.0, 0, 1)
+    est = np.stack([izq * fade, der * fade], axis=1)
+    est /= np.abs(est).max() + 1e-9
+    est *= 0.8
+    with wave.open(ruta, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes((est * 32767).astype("<i2").tobytes())
+    return ruta
+
+
+def _terror(duracion, ruta, rng):
+    """Atmósfera de terror: dron grave disonante que respira, golpes sordos y un cristal agudo que inquieta."""
+    total = int(SR * (duracion + 3))
+    t = np.arange(total) / SR
+    raiz = hz(["D", "C#", "E", "F"][rng.integers(4)], 1)
+    izq = np.zeros(total)
+    der = np.zeros(total)
+    for mult, amp in ((1, 0.30), (2 ** (1 / 12), 0.10), (2 ** (6 / 12), 0.07), (2, 0.08)):
+        lfo = 0.6 + 0.4 * np.sin(2 * np.pi * (0.05 + rng.uniform(0, 0.05)) * t + rng.uniform(0, 6))
+        izq += np.sin(2 * np.pi * raiz * mult * t) * amp * lfo
+        der += np.sin(2 * np.pi * raiz * mult * 1.003 * t + 0.4) * amp * lfo
+    ruido = _paso_bajo(rng.normal(0, 1, total), 380) * 0.5
+    izq += ruido
+    der += np.roll(ruido, 900)
+    # golpes sordos espaciados (como un corazón lejano)
+    k = 6.0 + rng.uniform(0, 3)
+    while k < duracion:
+        d = int(0.9 * SR)
+        tp = np.arange(d) / SR
+        g = np.sin(2 * np.pi * 48 * tp * np.exp(-tp * 3)) * np.exp(-tp * 5) * 0.9
+        o = int(k * SR)
+        if o + d < total:
+            izq[o:o + d] += g
+            der[o:o + d] += g
+        k += 7.5 + rng.uniform(0, 5)
+    # cristal agudo que aparece y se va
+    for _ in range(int(duracion / 14) + 1):
+        f = hz(["A#", "B", "D#"][rng.integers(3)], 5) * rng.choice([1, 1.06])
+        o = int(rng.uniform(3, max(4, duracion - 4)) * SR)
+        d = int(5 * SR)
+        if o + d < total:
+            tp = np.arange(d) / SR
+            v = np.sin(2 * np.pi * f * tp) * np.sin(np.pi * tp / 5) ** 2 * 0.05
+            izq[o:o + d] += v
+            der[o:o + d] += v * 0.7
+    izq = _reverb(_paso_bajo(izq, 1800), segundos=4.5, mezcla=0.5, rng=rng)
+    der = _reverb(_paso_bajo(der, 1800), segundos=4.5, mezcla=0.5, rng=rng)
+    return _guardar(izq, der, duracion, ruta)
+
+
+def _amor(duracion, ruta, rng):
+    """Noche tranquila: piano eléctrico cálido en tono mayor, colchón suave y arpegio lento, tipo lo-fi."""
+    progs = [[("C", "M"), ("G", "M"), ("A", "m"), ("F", "M")], [("F", "M"), ("A", "m"), ("G", "M"), ("C", "M")],
+             [("D", "M"), ("A", "M"), ("B", "m"), ("G", "M")]]
+    prog = progs[rng.integers(len(progs))]
+    total = int(SR * (duracion + 3))
+    izq = np.zeros(total)
+    der = np.zeros(total)
+    compas = 4.0
+    for k in range(int(duracion / compas) + 2):
+        raiz, tipo = prog[k % len(prog)]
+        ini = int(k * compas * SR)
+        fin = min(total, ini + int((compas + 2) * SR))
+        tt = np.arange(fin - ini) / SR
+        env = np.minimum(1, tt / 1.2) * np.clip((compas + 2 - tt) / 2, 0, 1)
+        for f in acorde(raiz, tipo, 3)[:3]:
+            v = (np.sin(2 * np.pi * f * tt) + 0.3 * np.sin(4 * np.pi * f * tt)) * env * 0.05
+            izq[ini:fin] += v
+            der[ini:fin] += v
+        f0 = hz(raiz, 2)
+        izq[ini:fin] += np.sin(2 * np.pi * f0 * tt) * env * 0.12
+        der[ini:fin] += np.sin(2 * np.pi * f0 * tt) * env * 0.12
+        notas = acorde(raiz, tipo, 4)
+        for j in range(4):  # arpegio lento de piano eléctrico
+            f = notas[(j + k) % len(notas)]
+            o = ini + int(j * compas / 4 * SR)
+            d = int(2.2 * SR)
+            if o + d < total and rng.random() < 0.85:
+                tp = np.arange(d) / SR
+                n = (np.sin(2 * np.pi * f * tp + 0.8 * np.sin(2 * np.pi * f * 2 * tp) * np.exp(-tp * 4)))
+                n *= np.exp(-tp * 2.2) * np.minimum(1, tp / 0.006) * 0.08
+                pan = 0.35 + 0.3 * (j % 2)
+                izq[o:o + d] += n * (1 - pan) * 2
+                der[o:o + d] += n * pan * 2
+    izq = _reverb(_paso_bajo(izq, 3200), segundos=2.6, mezcla=0.35, rng=rng)
+    der = _reverb(_paso_bajo(der, 3200), segundos=2.6, mezcla=0.35, rng=rng)
+    return _guardar(izq, der, duracion, ruta)
+
+
+def componer(duracion, ruta, semilla=1, animo=None):
     rng = np.random.default_rng(semilla)
+    if animo == "terror":
+        return _terror(duracion, ruta, rng)
+    if animo == "amor":
+        return _amor(duracion, ruta, rng)
     prog = PROGRESIONES[semilla % len(PROGRESIONES)]
     total = int(SR * (duracion + 3))
     t = np.arange(total) / SR

@@ -17,7 +17,9 @@ REGLAS
 - Respuestas CORTAS. Máximo 4 líneas, salvo que te pidan una lista.
 - Sin markdown, sin asteriscos, sin negritas. Texto plano.
 - Si te piden ideas o temas, pon de 6 a 8 en la lista "ideas": frases cortas (máximo 10 palabras cada una), sin explicación.
-  Mezcla: unas 7 de cada 10 de curiosidades (la pieza de un objeto cotidiano que "no está de adorno", un mito que todos creen
+  Si pide cortos de terror o de amor, escríbelos como "Corto de terror: el taquero que cierra a las dos" o
+  "Corto de amor: la playlist que hiciste antes de conocerla".
+  Mezcla: unas 6 de cada 10 de curiosidades (la pieza de un objeto cotidiano que "no está de adorno", un mito que todos creen
   y es falso, una rareza del cuerpo, los animales o la naturaleza, cómo funciona algo de casa) y unas 3 de cada 10 de historia
   o geografía con mapa (por qué un país, frontera, isla o ciudad es como es). Escríbelas como afirmación que sorprende
   ("Esa ranura de tu llave no está de adorno") o como pregunta ("¿Por qué Bolivia no tiene mar?").
@@ -31,7 +33,7 @@ Responde SIEMPRE solo con JSON
 {"respuesta": "lo que le dices", "ideas": [], "video": null}
 con ideas
 {"respuesta": "Aquí van unas que funcionan muy bien", "ideas": ["Esa tapita de tu guitarra no está de adorno", "¿Por qué Bolivia no tiene mar?"], "video": null}
-o, cuando toca hacer un video ("modo" es "curiosidades" o "mapas" según el tema)
+o, cuando toca hacer un video ("modo" es "curiosidades", "mapas", "terror" o "amor" según lo que pida; terror y amor son cortometrajes animados de ficción)
 {"respuesta": "Va, empiezo con ...", "video": {"tema": "tema claro", "horizontal": false, "modo": "curiosidades"}}
 """
 

@@ -83,3 +83,31 @@ MAPAS = [
     "¿Por qué Islandia tiene tan pocos árboles?",
     "¿Por qué Canadá tiene tantos lagos?",
 ]
+
+# cortometrajes animados: el prefijo le dice al bot qué tipo de video es
+TERROR = [
+    "Corto de terror: el taquero que cierra a las dos en punto",
+    "Corto de terror: la voz de mi mamá detrás de la puerta",
+    "Corto de terror: el espejo tapado en casa de la abuela",
+    "Corto de terror: el último microbús de la ruta",
+    "Corto de terror: la tiendita que abre a las tres de la mañana",
+    "Corto de terror: el vecino que toca tres veces",
+    "Corto de terror: la nota de voz que llegó a las 3:23",
+    "Corto de terror: la regla de no subir a la azotea",
+    "Corto de terror: el elevador que se detiene en el piso trece",
+    "Corto de terror: la niña que pide aventón en la carretera",
+    "Corto de terror: el velador del panteón municipal",
+    "Corto de terror: la llamada del número de mi papá",
+]
+AMOR = [
+    "Corto de amor: la playlist que hiciste antes de conocerla",
+    "Corto de amor: el amigo que no deja que te encierres",
+    "Corto de amor: la sudadera que nunca devolviste",
+    "Corto de amor: la última noche antes de mudarse",
+    "Corto de amor: el mensaje que escribes y borras",
+    "Corto de amor: reencontrarte con tu primer amor en una boda",
+    "Corto de amor: la carta que tu abuelo nunca envió",
+    "Corto de amor: el coche estacionado afuera de su casa",
+    "Corto de amor: la amistad que se volvió otra cosa",
+    "Corto de amor: aprender a estar solo en una fiesta",
+]

@@ -50,8 +50,12 @@ contador = {"idea": 0, "video": max(hechos, default=0)}
 
 # botones del teclado de abajo
 B_IDEAS, B_NUEVO, B_FORMATO, B_ESTADO, B_AYUDA = "💡 Ideas", "🎬 Nuevo video", "📐 Formato", "📊 Estado", "❓ Ayuda"
-B_ESTILO, B_PILOTO = "🎨 Estilo y narrador", "🤖 Piloto automático"
-TECLADO = ReplyKeyboardMarkup([[B_IDEAS, B_NUEVO], [B_ESTILO, B_PILOTO], [B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
+B_ESTILO, B_PILOTO = "🎨 Estilo", "🤖 Piloto automático"
+B_CURIOSIDAD, B_MAPA, B_TERROR, B_AMOR = "🧩 Curiosidad 3D", "🗺️ Historia con mapa", "👻 Corto de terror", "💘 Corto de amor"
+TIPOS = {B_CURIOSIDAD: "curiosidades", B_MAPA: "mapas", B_TERROR: "terror", B_AMOR: "amor"}
+NOMBRE_TIPO = {"curiosidades": "🧩 Curiosidad 3D", "mapas": "🗺️ Historia con mapa", "terror": "👻 Corto de terror", "amor": "💘 Corto de amor"}
+# menú principal: arriba qué tipo de video quieres, en medio ideas y piloto, abajo ajustes
+TECLADO = ReplyKeyboardMarkup([[B_CURIOSIDAD, B_MAPA], [B_TERROR, B_AMOR], [B_IDEAS, B_PILOTO], [B_ESTILO, B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
                               input_field_placeholder="Escríbeme o mándame un audio…")
 
 PASOS = ["Guion investigado y verificado", "Voz grabada", "Música original", "Mapas animados"]
@@ -153,7 +157,7 @@ def texto_estilo(chat):
     p = ajustes.estilo(chat)
     return ("<b>🎨 Estilo y narrador</b>\n<i>Lo que elijas se usa en los siguientes videos. En Automático cambio en cada video "
             "para que el canal no se vea repetido.</i>\n\n"
-            f"🧩 Tipo  <b>{ {'curiosidades': '🧩 Curiosidades 3D', 'mapas': '🗺️ Historia con mapas'}.get(p.get('modo'), '🎲 Automático') }</b>\n"
+            f"🧩 Tipo  <b>{ {'curiosidades': '🧩 Curiosidades 3D', 'mapas': '🗺️ Historia con mapas', 'terror': '👻 Cortos de terror', 'amor': '💘 Cortos de amor'}.get(p.get('modo'), '🎲 Automático') }</b>\n"
             f"🖼️ Look  <b>{e(_nombre_look(p.get('look')))}</b>\n"
             f"🧠 Narrador  <b>{e(_nombre_cerebro(p.get('cerebro')))}</b>\n"
             f"🎙️ Voz  <b>{e(_nombre_voz(p.get('voz')))}</b>")
@@ -185,6 +189,8 @@ def botones_estilo(chat, seccion="look", video=None):
         agrega(("✅ " if not p.get("modo") else "") + "🎲 Automático", "est:modo:auto")
         agrega(("✅ " if p.get("modo") == "curiosidades" else "") + "🧩 Curiosidades 3D", "est:modo:curiosidades")
         agrega(("✅ " if p.get("modo") == "mapas" else "") + "🗺️ Historia con mapas", "est:modo:mapas")
+        agrega(("✅ " if p.get("modo") == "terror" else "") + "👻 Cortos de terror", "est:modo:terror")
+        agrega(("✅ " if p.get("modo") == "amor" else "") + "💘 Cortos de amor", "est:modo:amor")
     else:
         agrega(("✅ " if not p.get("voz") else "") + "🎲 Automática", "est:voz:auto")
         for v in estilos._voces():
@@ -389,14 +395,18 @@ async def piloto_uno(app: Application, chat):
 # ---------------- pantallas ----------------
 async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     texto = (f"<b>Bienvenido a {marca.NOMBRE}</b>\n<i>{marca.LEMA}</i>\n\n"
-             "Soy tu fábrica de documentales cortos. Platica conmigo por texto o 🎙️ nota de voz.\n\n"
+             "Soy tu fábrica de videos cortos. Platica conmigo por texto o 🎙️ nota de voz.\n\n"
+             "🧩 Curiosidades en 3D   🗺️ Historia con mapas\n"
+             "👻 Cortos de terror   💘 Cortos de amor\n\n"
              "💡 Te propongo ideas y las eliges con un toque\n"
-             "🎬 Investigo, escribo, grabo la voz y animo en 3D o con mapas\n"
+             "🎬 Escribo con el método Zepfilms, grabo las voces y animo\n"
              "🚀 Lo publico en Facebook, Instagram, YouTube y TikTok\n"
              "🎨 Eliges look, narrador y voz con botones\n"
              "🤖 Con el piloto automático hago y publico videos solo\n\n"
              f"Tu número de usuario es <code>{update.effective_user.id}</code>")
-    menu = Botones([[Boton("💡 Dame ideas", callback_data="mas"), Boton("✍️ Tengo un tema", callback_data="propio")],
+    menu = Botones([[Boton("🧩 Curiosidad", callback_data="tipo:curiosidades"), Boton("🗺️ Mapa", callback_data="tipo:mapas")],
+                    [Boton("👻 Terror", callback_data="tipo:terror"), Boton("💘 Amor", callback_data="tipo:amor")],
+                    [Boton("💡 Dame ideas", callback_data="mas"), Boton("✍️ Tengo un tema", callback_data="propio")],
                     [Boton("🎨 Estilo y narrador", callback_data="estsec:look"), Boton("🤖 Piloto automático", callback_data="pilmenu")]])
     try:
         with open(BANNER, "rb") as f:
@@ -411,9 +421,13 @@ async def ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "<b>❓ Cómo usarme</b>\n\n"
         "💬 <b>Platica normal.</b> \"Dame ideas de cocina\", \"hazme el de Alaska\", \"uno sobre por qué bostezamos\"\n"
         "🎙️ <b>Notas de voz.</b> Te escucho igual que por texto\n"
+        "🧩🗺️👻💘 <b>Tipo de video.</b> Toca el tipo en el menú, elige una idea o escribe la tuya\n"
+        "👻 <b>Terror.</b> Leyenda urbana con lugar y hora, celular, voces distintas y encuesta final\n"
+        "💘 <b>Amor.</b> Dos personajes de noche, diálogo y reflexión al final\n"
+        "📝 <b>/esqueleto</b> tema arma la escaleta, <b>/auditar</b> revisa un guion tuyo\n"
         "💡 <b>Ideas.</b> Toca una y empiezo el video\n"
         "📐 <b>Formato.</b> Vertical para Shorts y Reels, horizontal para YouTube normal\n"
-        "🎨 <b>Estilo y narrador.</b> Elige look, forma de narrar y voz, o déjalo en automático\n"
+        "🎨 <b>Estilo.</b> Elige tipo, look, forma de narrar y voz, o déjalo en automático\n"
         "🤖 <b>Piloto automático.</b> Hago y publico videos solo, a las horas que elijas\n"
         "🚀 <b>Redes.</b> Al terminar cada video aparece el botón para publicarlo en Facebook e Instagram\n\n"
         "Cada video tarda unos 5 minutos. Mientras, puedes seguir platicando conmigo.",
@@ -466,8 +480,39 @@ def pedido_ideas(extra=""):
     cats = random.sample(CATEGORIAS, 5)
     vistas = (ajustes.ideas_dadas() + ajustes.temas_hechos())[-120:]
     return (f"Dame 8 ideas nuevas{(' ' + extra) if extra else ''}. Esta vez inspírate sobre todo en estos temas: {', '.join(cats)}. "
-            "Unas 6 de curiosidades y 2 de historia o geografía con mapa. "
+            "Unas 5 de curiosidades, 1 de historia o geografía con mapa, 1 corto de terror que empiece con 'Corto de terror: ' "
+            "(leyenda urbana mexicana con una regla o una anomalía) y 1 corto de amor que empiece con 'Corto de amor: '. "
             "Prohibido repetir o parafrasear cualquiera de estas, ya se usaron: " + "; ".join(vistas))
+
+
+async def menu_tipo(update: Update, ctx: ContextTypes.DEFAULT_TYPE, modo: str):
+    """Elegiste un tipo de video: te propongo tres temas de ese tipo, uno al azar, o escribes tu idea."""
+    import random
+    from . import banco_temas
+    banco = {"curiosidades": banco_temas.CURIOSIDADES, "mapas": banco_temas.MAPAS,
+             "terror": banco_temas.TERROR, "amor": banco_temas.AMOR}[modo]
+    usados = set(ajustes.temas_hechos())
+    libres = [x for x in banco if x not in usados] or list(banco)
+    ideas = random.sample(libres, min(3, len(libres)))
+    if ctx.chat_data is not None:
+        ctx.chat_data["modo_pendiente"] = modo
+    filas = []
+    for tema in ideas:
+        contador["idea"] += 1
+        ideas_guardadas[contador["idea"]] = tema
+        filas.append([Boton(f"🎬 {tema.split(': ', 1)[-1]}", callback_data=f"idea:{contador['idea']}")])
+    contador["idea"] += 1
+    ideas_guardadas[contador["idea"]] = random.choice(libres)
+    filas.append([Boton("🎲 Sorpréndeme", callback_data=f"idea:{contador['idea']}")])
+    detalle = {
+        "curiosidades": "Objetos 3D reales con luz de cine y letras grandes arriba.",
+        "mapas": "Mapas en relieve, zonas que se iluminan y narrador.",
+        "terror": "Leyenda urbana en primera persona, lugar y hora reales, pantallas de celular y encuesta final.",
+        "amor": "Dos personajes de noche, diálogo con voces distintas y reflexión al final.",
+    }[modo]
+    await update.effective_message.reply_text(
+        f"<b>{NOMBRE_TIPO[modo]}</b>\n<i>{detalle}</i>\n\nToca una idea o <b>escríbeme la tuya</b> y lo hago de este tipo.",
+        parse_mode=ParseMode.HTML, reply_markup=Botones(filas))
 
 
 async def dar_ideas(update: Update, ctx: ContextTypes.DEFAULT_TYPE, extra=""):
@@ -492,7 +537,7 @@ async def dar_ideas(update: Update, ctx: ContextTypes.DEFAULT_TYPE, extra=""):
     if len(ideas) < 3:
         import random
         from . import banco_temas
-        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS if t not in usados and t not in ideas]
+        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS + banco_temas.TERROR + banco_temas.AMOR if t not in usados and t not in ideas]
         ideas += random.sample(libres, min(8 - len(ideas), len(libres)))
     if not ideas:
         await update.effective_message.reply_text("Ya usé todas las ideas que tenía. Escríbeme un tema y lo hago.")
@@ -519,7 +564,7 @@ async def platicar(update: Update, ctx: ContextTypes.DEFAULT_TYPE, texto: str):
             await update.effective_message.reply_text(respuesta)
         if pedido and pedido.get("tema"):
             horizontal = bool(pedido.get("horizontal")) or es_horizontal(chat)
-            forzar = dict(ajustes.estilo(chat), **({"modo": pedido["modo"]} if pedido.get("modo") in ("curiosidades", "mapas") else {}))
+            forzar = dict(ajustes.estilo(chat), **({"modo": pedido["modo"]} if pedido.get("modo") in ("curiosidades", "mapas", "terror", "amor") else {}))
             asyncio.create_task(producir(update, ctx, pedido["tema"], horizontal, forzar=forzar))
     except Exception as err:
         logging.exception("charla")
@@ -530,13 +575,27 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not autorizado(update):
         return
     t = update.message.text.strip()
+    if t in TIPOS:
+        await menu_tipo(update, ctx, TIPOS[t])
+        return
+    if t in ("🎨 Estilo y narrador",):  # botón del teclado anterior
+        await menu_estilo(update, ctx)
+        return
+    pendiente = ctx.chat_data.pop("modo_pendiente", None) if ctx.chat_data is not None else None
+    if pendiente and t not in (B_IDEAS, B_NUEVO, B_FORMATO, B_ESTILO, B_PILOTO, B_ESTADO, B_AYUDA) and len(t) > 3:
+        chat = update.effective_chat.id
+        forzar = dict(ajustes.estilo(chat), modo=pendiente)
+        tema = t if pendiente not in ("terror", "amor") else f"Corto de {pendiente}: {t}"
+        await update.message.reply_text(f"👌 Va, {NOMBRE_TIPO[pendiente]} sobre <b>{e(t)}</b>", parse_mode=ParseMode.HTML)
+        asyncio.create_task(producir(update, ctx, tema, es_horizontal(chat) and pendiente in ("curiosidades", "mapas"), forzar=forzar))
+        return
     if t == B_IDEAS:
         await dar_ideas(update, ctx)
     elif t == B_NUEVO:
         await pedir_tema(update)
     elif t == B_FORMATO:
         await elegir_formato(update, ctx)
-    elif t == B_ESTILO or (len(t) < 60 and any(k in t.lower() for k in ("estilo", "look", "narrador", "voces", "la voz"))):
+    elif t == B_ESTILO or (len(t) < 30 and any(k in t.lower() for k in ("estilo", "look", "narrador", "voces", "la voz"))):
         await menu_estilo(update, ctx)
     elif t == B_PILOTO or (len(t) < 60 and "piloto" in t.lower()):
         await menu_piloto(update, ctx)
@@ -700,6 +759,10 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if tema:
             await q.message.reply_text(f"👌 Elegiste <b>{e(tema)}</b>", parse_mode=ParseMode.HTML)
             asyncio.create_task(producir(update, ctx, tema, es_horizontal(chat)))
+    elif accion == "tipo":
+        await q.answer()
+        if valor in NOMBRE_TIPO:
+            await menu_tipo(update, ctx, valor)
     elif accion == "mas":
         await q.answer("💡 Buscando…")
         await dar_ideas(update, ctx, "distintas a las anteriores")
@@ -925,7 +988,20 @@ def texto_auditoria(spec):
             partes.append(f"❌ {e(str(p_))}")
         for p_ in (au.get("funciona") or [])[:3]:
             partes.append(f"✅ {e(str(p_))}")
-    if spec.get("guion"):
+    if spec.get("premisa"):
+        partes.append(f"<b>Premisa</b>  {e(str(spec['premisa']))}")
+    if spec.get("escaleta"):
+        partes.append("<b>Escaleta</b>  " + e(" → ".join(map(str, spec["escaleta"]))))
+    for pc in (spec.get("plantar_cosechar") or [])[:4]:
+        if isinstance(pc, (list, tuple)) and len(pc) == 2:
+            partes.append(f"🌱 {e(str(pc[0]))} → {e(str(pc[1]))}")
+    if spec.get("lineas"):
+        nombres = {p.get("id"): p.get("nombre", p.get("id")) for p in spec.get("personajes") or []}
+        partes.append("\n<b>Guion final</b>")
+        for ln in spec["lineas"]:
+            quien = "Narrador" if ln.get("quien") == "narrador" else nombres.get(ln.get("quien"), ln.get("quien"))
+            partes.append(f"<b>{e(str(quien))}</b>  <i>{e(str(ln.get('texto', '')))}</i>")
+    elif spec.get("guion"):
         partes.append(f"\n<b>Guion final</b>\n<i>{e(spec['guion'])}</i>")
     if len(partes) == 1:
         partes.append("Este video es de antes de que el bot armara esqueleto y auditoría.")

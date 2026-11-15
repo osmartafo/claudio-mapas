@@ -39,12 +39,12 @@ function materialCine(o) {
 
 // grano de película, viñeta y un toque cálido
 const GradoCine = {
-  uniforms: { tDiffuse: { value: null }, tiempo: { value: 0 }, grano: { value: 0.06 }, vineta: { value: 0.9 } },
+  uniforms: { tDiffuse: { value: null }, tiempo: { value: 0 }, grano: { value: 0.06 }, vineta: { value: 0.9 }, tinte: { value: new THREE.Vector3(1.06, 1.0, 0.9) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float tiempo; uniform float grano; uniform float vineta; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float tiempo; uniform float grano; uniform float vineta; uniform vec3 tinte; varying vec2 vUv;
     float az(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + tiempo*43.0) * 43758.5453); }
     void main(){ vec4 c = texture2D(tDiffuse, vUv);
-      c.rgb = mix(c.rgb, c.rgb * vec3(1.06, 1.0, 0.9), 0.6);
+      c.rgb = mix(c.rgb, c.rgb * tinte, 0.6);
       float d = distance(vUv, vec2(0.5)); c.rgb *= mix(1.0, smoothstep(0.85, 0.25, d), vineta * 0.55);
       c.rgb += (az(vUv * 1000.0) - 0.5) * grano;
       gl_FragColor = c; }`,
@@ -126,6 +126,182 @@ function texto(t, color = '#111111', fondo = '#ffffff') {
 const suave = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
 const rebote = u => { if (u <= 0) return 0; if (u >= 1) return 1; const c = 1.70158 + 1; return 1 + c * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2); };
 
+
+// ---------------- cortometrajes: personajes, cuartos y luces prácticas ----------------
+// Personaje de líneas facetadas (low poly) con una luz en el pecho, como en los cortos animados de referencia.
+// Mide 1.7 m de pie. Sentado, su pecho queda a 0.9 m y la cabeza a 1.25 m.
+const luces = [];   // {luz, base, id, malla}  para que el pecho "hable" o una lámpara parpadee
+function matFacetado(color, emisivo, k = 0.12) {
+  return new THREE.MeshStandardMaterial({ color: new THREE.Color(color), flatShading: true, roughness: 0.78, metalness: 0.0,
+    emissive: new THREE.Color(emisivo || '#000000'), emissiveIntensity: emisivo ? k : 0 });
+}
+function pieza(geo, mat, x, y, z) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m; }
+function articulacion(padre, x, y, z) { const g = new THREE.Group(); g.position.set(x, y, z); padre.add(g); return g; }
+
+const POSES = {
+  de_pie:        { cadera: [0, 0], rodilla: [0, 0], hombro: [6, -6], codo: [-10, -10], torso: 0, cabeza: 0, alto: 0.92 },
+  caminando:     { cadera: [22, -22], rodilla: [-8, -30], hombro: [-20, 20], codo: [-15, -15], torso: 4, cabeza: 0, alto: 0.9 },
+  sentado:       { cadera: [-88, -88], rodilla: [88, 88], hombro: [10, -4], codo: [-55, -50], torso: 4, cabeza: 0, alto: 0.47 },
+  cabizbajo:     { cadera: [-88, -88], rodilla: [88, 88], hombro: [-38, -38], codo: [-62, -62], torso: 28, cabeza: 42, alto: 0.47 },
+  brazos_cruzados: { cadera: [0, 0], rodilla: [0, 0], hombro: [-25, -25], codo: [-110, -110], torso: 0, cabeza: 0, alto: 0.92, cruzar: true },
+  senalando:     { cadera: [0, 0], rodilla: [0, 0], hombro: [-80, 6], codo: [-5, -10], torso: 0, cabeza: 0, alto: 0.92 },
+  manos_cara:    { cadera: [-88, -88], rodilla: [88, 88], hombro: [-75, -75], codo: [-120, -120], torso: 22, cabeza: 30, alto: 0.47, cruzar: true },
+  acostado:      { cadera: [0, 0], rodilla: [0, 0], hombro: [4, -4], codo: [-5, -5], torso: 0, cabeza: 0, alto: 0.92, acostado: true },
+};
+
+function personaje(o) {
+  const raiz = new THREE.Group();
+  const cuerpo = new THREE.Group(); raiz.add(cuerpo);
+  const luzColor = o.luz || null;
+  // colores muy claros se queman con las luces de noche: se topan a un gris medio
+  const topar = (c, def) => { const k = new THREE.Color(c || def); const hsl = {}; k.getHSL(hsl); if (hsl.l > 0.38) k.setHSL(hsl.h, hsl.s, 0.38); return '#' + k.getHexString(); };
+  const mat = matFacetado(topar(o.color, '#666B7C'), luzColor, 0.07);
+  const matOscuro = matFacetado(topar(o.color_ropa || o.color, '#4E5363'), luzColor, 0.05);
+  const p = POSES[o.pose] || POSES.de_pie;
+  const cadera = articulacion(cuerpo, 0, p.alto, 0);
+  // torso facetado, más ancho en los hombros
+  const torso = articulacion(cadera, 0, 0, 0); torso.rotation.x = R(p.torso);
+  const tg = new THREE.CylinderGeometry(0.2, 0.16, 0.58, 6, 1); tg.scale(1, 1, 0.62);
+  torso.add(pieza(tg, matOscuro, 0, 0.32, 0));
+  const pg = new THREE.CylinderGeometry(0.165, 0.15, 0.16, 6, 1); pg.scale(1, 1, 0.66); cadera.add(pieza(pg, matOscuro, 0, 0.0, 0));
+  const cuello = pieza(new THREE.CylinderGeometry(0.05, 0.06, 0.08, 5), mat, 0, 0.64, 0); torso.add(cuello);
+  const cab = articulacion(torso, 0, 0.68, 0); cab.rotation.x = R(p.cabeza);
+  const hg = new THREE.IcosahedronGeometry(0.13, 0); hg.scale(0.92, 1.18, 1.0);
+  cab.add(pieza(hg, mat, 0, 0.13, 0));
+  if (o.peinado === 'chongo') { cab.add(pieza(new THREE.IcosahedronGeometry(0.075, 0), matOscuro, 0, 0.29, -0.06)); cab.add(pieza(new THREE.IcosahedronGeometry(0.135, 0), matOscuro, 0, 0.17, -0.025)); }
+  if (o.peinado === 'largo') { const g = new THREE.CylinderGeometry(0.12, 0.15, 0.34, 6, 1, true, Math.PI * 0.55, Math.PI * 0.9); cab.add(pieza(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(o.color_pelo || '#1E1A24'), flatShading: true, roughness: 0.9, side: THREE.DoubleSide }), 0, 0.05, -0.01)); cab.add(pieza(new THREE.IcosahedronGeometry(0.138, 0), new THREE.MeshStandardMaterial({ color: new THREE.Color(o.color_pelo || '#1E1A24'), flatShading: true, roughness: 0.9 }), 0, 0.17, -0.025)); }
+  if (o.peinado === 'corto') cab.add(pieza(new THREE.IcosahedronGeometry(0.137, 0), matOscuro, 0, 0.18, -0.025));
+  if (o.peinado === 'gorra') { cab.add(pieza(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 7), matOscuro, 0, 0.25, 0)); cab.add(pieza(new THREE.BoxGeometry(0.2, 0.02, 0.14), matOscuro, 0, 0.22, 0.13)); }
+  if (o.cara === 'ojos' || o.cara === 'ojos_brillo') {
+    const mo = o.cara === 'ojos_brillo' ? new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color_ojos || '#FFFFFF') }) : new THREE.MeshBasicMaterial({ color: 0x050505 });
+    for (const x of [-0.045, 0.045]) cab.add(pieza(new THREE.SphereGeometry(0.016, 8, 6), mo, x, 0.15, 0.115));
+  }
+  // brazos: hombro y codo
+  const brazo = (lado, i) => {
+    const h = articulacion(torso, lado * 0.23, 0.56, 0); h.rotation.x = R(p.hombro[i]); h.rotation.z = R(lado * 6);
+    h.add(pieza(new THREE.CylinderGeometry(0.055, 0.048, 0.3, 5), mat, 0, -0.15, 0));
+    const c = articulacion(h, 0, -0.3, 0); c.rotation.x = R(p.codo[i]);
+    if (p.cruzar) { h.rotation.y = R(-lado * 25); c.rotation.y = R(-lado * 70); }
+    c.add(pieza(new THREE.CylinderGeometry(0.046, 0.04, 0.28, 5), mat, 0, -0.14, 0));
+    c.add(pieza(new THREE.IcosahedronGeometry(0.05, 0), mat, 0, -0.3, 0));
+  };
+  brazo(-1, 0); brazo(1, 1);
+  const pierna = (lado, i) => {
+    const h = articulacion(cadera, lado * 0.1, 0, 0); h.rotation.x = R(p.cadera[i]);
+    h.add(pieza(new THREE.CylinderGeometry(0.08, 0.065, 0.45, 5), matOscuro, 0, -0.225, 0));
+    const r = articulacion(h, 0, -0.45, 0); r.rotation.x = R(p.rodilla[i]);
+    r.add(pieza(new THREE.CylinderGeometry(0.062, 0.05, 0.43, 5), matOscuro, 0, -0.215, 0));
+    r.add(pieza(new THREE.BoxGeometry(0.1, 0.06, 0.2), matOscuro, 0, -0.45, 0.05));
+  };
+  pierna(-1, 0); pierna(1, 1);
+  if (p.acostado) { cuerpo.rotation.x = R(-90); cuerpo.position.set(0, 0.12, 0.9); }
+  const esc = (o.altura || 1.7) / 1.7; cuerpo.scale.setScalar(esc);
+  if (luzColor) {  // la luz del pecho: cuenta lo que siente el personaje y late cuando habla
+    const nucleo = pieza(new THREE.OctahedronGeometry(0.035, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(luzColor).multiplyScalar(2.2) }), 0, 0.42, 0.105);
+    nucleo.castShadow = false; torso.add(nucleo);
+    const l = new THREE.PointLight(new THREE.Color(luzColor), o.intensidad ?? 0.9, 2.4, 1.8);
+    l.position.set(0, 0.42, 0.3); torso.add(l);
+    luces.push({ luz: l, base: l.intensity, id: o.id, malla: nucleo, tipo: 'pecho' });
+  }
+  raiz.userData.cabeza = cab;
+  return raiz;
+}
+
+function texturaPapel(color, motivo) {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.fillStyle = color; x.fillRect(0, 0, 256, 256);
+  const tono = new THREE.Color(color).offsetHSL(0, -0.05, 0.12).getStyle();
+  x.fillStyle = tono; x.strokeStyle = tono; x.lineWidth = 6;
+  if (motivo === 'flores') for (const [a, b] of [[64, 64], [192, 64], [128, 160], [0, 160], [256, 160], [64, 256], [192, 256], [64, 0], [192, 0]]) {
+    for (let k = 0; k < 5; k++) { const ang = k * Math.PI * 2 / 5; x.beginPath(); x.ellipse(a + Math.cos(ang) * 10, b + Math.sin(ang) * 10, 9, 5, ang, 0, Math.PI * 2); x.fill(); }
+  }
+  if (motivo === 'rayas') for (let i = 0; i < 256; i += 32) x.fillRect(i, 0, 10, 256);
+  if (motivo === 'azulejo') { x.strokeStyle = new THREE.Color(color).offsetHSL(0, 0, -0.12).getStyle(); x.lineWidth = 4; for (let i = 0; i <= 256; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 256); x.moveTo(0, i); x.lineTo(256, i); x.stroke(); } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+// cuarto: piso, tres paredes (la cámara mira desde el lado abierto), techo opcional, puerta y ventana
+function cuarto(o) {
+  const g = new THREE.Group(); const [w, h, d] = o.tam || [4, 2.6, 4];
+  const papel = o.papel ? texturaPapel(o.color || '#6B6A8E', o.papel) : null;
+  if (papel) papel.repeat.set(w / 1.2, h / 1.2);
+  const matPared = new THREE.MeshStandardMaterial({ color: papel ? '#ffffff' : (o.color || '#6B6A8E'), map: papel, roughness: 0.92, side: THREE.DoubleSide });
+  const matPiso = new THREE.MeshStandardMaterial({ color: o.piso || '#4A3A30', roughness: 0.8, map: o.piso_motivo ? texturaPapel(o.piso || '#4A3A30', o.piso_motivo) : null });
+  if (matPiso.map) { matPiso.color.set('#ffffff'); matPiso.map.repeat.set(w / 1.5, d / 1.5); }
+  const plano = (mw, mh, mat, x, y, z, rx, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); m.receiveShadow = true; g.add(m); return m; };
+  plano(w, d, matPiso, 0, 0.002, 0, -Math.PI / 2, 0);
+  plano(w, h, matPared, 0, h / 2, -d / 2, 0, 0);
+  plano(d, h, matPared, -w / 2, h / 2, 0, 0, Math.PI / 2);
+  plano(d, h, matPared, w / 2, h / 2, 0, 0, -Math.PI / 2);
+  if (o.techo) plano(w, d, new THREE.MeshStandardMaterial({ color: o.techo === true ? '#BDB7AE' : o.techo, roughness: 0.9, side: THREE.DoubleSide }), 0, h, 0, Math.PI / 2, 0);
+  const pared = (cual, x) => cual === 'izq' ? [[-w / 2 + 0.03, 0, x], Math.PI / 2] : cual === 'der' ? [[w / 2 - 0.03, 0, x], -Math.PI / 2] : [[x, 0, -d / 2 + 0.03], 0];
+  if (o.puerta) {
+    const pu = o.puerta === true ? {} : o.puerta; const [pp, ry] = pared(pu.pared || 'fondo', pu.x ?? 0.9);
+    const marco = new THREE.Group(); marco.position.set(...pp); marco.rotation.y = ry; g.add(marco);
+    const hoja = new THREE.Group(); hoja.position.set(-0.45, 0, 0.03); marco.add(hoja);
+    hoja.add(pieza(new THREE.BoxGeometry(0.9, 2.05, 0.05), new THREE.MeshStandardMaterial({ color: pu.color || '#6E4A2E', roughness: 0.7 }), 0.45, 1.025, 0));
+    hoja.add(pieza(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshStandardMaterial({ color: '#D9B25A', metalness: 1, roughness: 0.3 }), 0.8, 1.0, 0.05));
+    hoja.rotation.y = R(pu.abierta || 0);
+    objetos[(o.id || 'cuarto') + '_puerta'] = hoja; base[(o.id || 'cuarto') + '_puerta'] = { pos: hoja.position.clone(), rot: hoja.rotation.clone(), escala: 1, color: null, malla: null };
+    if (pu.luz_detras) { const l = new THREE.PointLight(new THREE.Color(pu.luz_detras), 1.6, 3, 1.8); l.position.set(0, 1.4, -0.6); marco.add(l); }
+  }
+  if (o.ventana) {
+    const ve = o.ventana === true ? {} : o.ventana; const [pp, ry] = pared(ve.pared || 'izq', ve.x ?? -0.6);
+    const m = new THREE.Group(); m.position.set(pp[0], 1.0, pp[2]); m.rotation.y = ry; g.add(m);
+    const luna = new THREE.Color(ve.color || '#9FB4FF');
+    m.add(pieza(new THREE.PlaneGeometry(1.0, 1.2), new THREE.MeshBasicMaterial({ color: luna.clone().multiplyScalar(0.9) }), 0, 0.6, 0.01));
+    for (const x of [-0.5, 0, 0.5]) m.add(pieza(new THREE.BoxGeometry(0.05, 1.25, 0.05), new THREE.MeshStandardMaterial({ color: '#2A2830' }), x, 0.6, 0.03));
+    for (const y of [0, 0.6, 1.2]) m.add(pieza(new THREE.BoxGeometry(1.05, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#2A2830' }), 0, y, 0.03));
+    const l = new THREE.SpotLight(luna, 3.5, 9, Math.PI / 5, 0.6, 1.2); l.position.set(0, 0.8, 0.8); l.castShadow = true; l.shadow.mapSize.set(512, 512);
+    const blanco = new THREE.Object3D(); blanco.position.set(0, -1.0, 2.5); m.add(blanco); l.target = blanco; m.add(l);
+  }
+  return g;
+}
+
+// serie de focos colgando (fiesta de noche) o un foco suelto
+function serieLuces(o) {
+  const g = new THREE.Group(); const pts = (o.puntos || [[-3, 2.6, -2], [3, 2.6, -2]]).map(v => new THREE.Vector3(...v));
+  const colores = o.colores || ['#FFD9A0'];
+  let n = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], k = o.focos || 12;
+    const cable = []; for (let j = 0; j <= 24; j++) { const u = j / 24; const p = a.clone().lerp(b, u); p.y -= Math.sin(u * Math.PI) * (o.comba ?? 0.35); cable.push(p); }
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cable), 32, 0.006, 4), new THREE.MeshBasicMaterial({ color: 0x111111 })));
+    for (let j = 1; j < k; j++) {
+      const u = j / k; const p = a.clone().lerp(b, u); p.y -= Math.sin(u * Math.PI) * (o.comba ?? 0.35) + 0.05;
+      const c = new THREE.Color(colores[n++ % colores.length]);
+      g.add(pieza(new THREE.SphereGeometry(0.04, 10, 8), new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.5) }), p.x, p.y, p.z));
+    }
+    const l = new THREE.PointLight(new THREE.Color(colores[0]), o.intensidad ?? 2.5, 7, 1.6); l.position.copy(a.clone().lerp(b, 0.5)); l.position.y -= 0.3; g.add(l);
+  }
+  return g;
+}
+function foco(o) {
+  const g = new THREE.Group(); const c = new THREE.Color(o.color || '#FFD39A');
+  const bulbo = pieza(new THREE.SphereGeometry(o.radio || 0.06, 12, 10), new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.4) }), 0, 0, 0);
+  bulbo.castShadow = false; g.add(bulbo);
+  const l = new THREE.PointLight(c, Math.min(o.intensidad ?? 2.5, 3.2), o.alcance || 6, 1.6); l.castShadow = !!o.sombra; if (l.castShadow) l.shadow.mapSize.set(512, 512); g.add(l);
+  luces.push({ luz: l, base: l.intensity, id: o.id, malla: bulbo, tipo: 'foco' });
+  return g;
+}
+// bolitas de luz desenfocadas al fondo (bokeh), dan profundidad a las tomas de noche
+function bokehFondo(o) {
+  const g = new THREE.Group(); const colores = o.colores || ['#FFC98A', '#FF7FB0', '#8FD8FF'];
+  let sem = 7; const az = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < (o.n || 40); i++) {
+    const c = new THREE.Color(colores[i % colores.length]);
+    const m = new THREE.Mesh(new THREE.CircleGeometry(0.06 + az() * 0.1, 18), new THREE.MeshBasicMaterial({ color: c.multiplyScalar(1.6), transparent: true, opacity: 0.35 + az() * 0.4, depthWrite: false }));
+    m.position.set((az() - 0.5) * 12, 0.6 + az() * 3.2, -6 - az() * 6); g.add(m);
+  }
+  return g;
+}
+const AMBIENTES = {
+  atardecer: null,
+  noche:  { fondo: '#0A0C18', suelo: '#151726', sol: 0x7F8CFF, solI: 0.55, hemi: [0x5866a8, 0x0b0b14, 0.28], niebla: 0.05, exp: 1.0, tinte: [0.95, 0.97, 1.08], grano: 0.05, vineta: 1.0, bloom: 0.55 },
+  terror: { fondo: '#0B0A12', suelo: '#1A1822', sol: 0x8C86C8, solI: 0.42, hemi: [0x4a4a78, 0x050508, 0.22], niebla: 0.07, exp: 0.82, tinte: [0.92, 0.95, 1.06], grano: 0.09, vineta: 1.3, bloom: 0.35 },
+  interior: { fondo: '#1B1714', suelo: '#3A2E26', sol: 0xFFE2B8, solI: 1.2, hemi: [0xbfb2a0, 0x2a2018, 0.5], niebla: 0.02, exp: 0.95, tinte: [1.03, 1.0, 0.95], grano: 0.05, vineta: 0.9, bloom: 0.3 },
+};
+
 window.preparar = async (d, ancho, alto) => {
   def = d; cine = (d.estilo || 'cine') !== 'caricatura';
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -135,26 +311,28 @@ window.preparar = async (d, ancho, alto) => {
   document.body.appendChild(renderer.domElement);
   efecto = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.07, 0.07, 0.07] });
   escena = new THREE.Scene();
-  escena.background = new THREE.Color(cine ? (d.fondo_cine || '#17110C') : (d.fondo || '#BFE6F7'));
-  camara = new THREE.PerspectiveCamera(d.lente || (cine ? 32 : 38), ancho / alto, 0.05, 400);
+  const amb = AMBIENTES[d.ambiente] || null;
+  escena.background = new THREE.Color(amb ? (d.fondo_cine || amb.fondo) : cine ? (d.fondo_cine || '#17110C') : (d.fondo || '#BFE6F7'));
+  camara = new THREE.PerspectiveCamera(d.lente || (AMBIENTES[d.ambiente] ? 42 : cine ? 32 : 38), ancho / alto, 0.05, 400);
   if (cine) {
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = d.exposicion || 0.9;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = d.exposicion || (amb ? amb.exp : 0.9);
     const pm = new THREE.PMREMGenerator(renderer);
     escena.environment = pm.fromScene(new RoomEnvironment(renderer), 0.04).texture;
     escena.environmentIntensity = 0.35;
-    escena.fog = new THREE.FogExp2(escena.background.getHex(), 0.035);
-    escena.add(new THREE.HemisphereLight(0x8fa7c8, 0x2a1a10, 0.35));
+    escena.fog = new THREE.FogExp2(escena.background.getHex(), amb ? amb.niebla : 0.035);
+    escena.add(amb ? new THREE.HemisphereLight(...amb.hemi) : new THREE.HemisphereLight(0x8fa7c8, 0x2a1a10, 0.35));
+    if (amb) escena.environmentIntensity = 0.15;
   } else {
     escena.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
   }
-  const sol = new THREE.DirectionalLight(cine ? 0xFFC48A : 0xffffff, cine ? 2.4 : 2.2);
+  const sol = new THREE.DirectionalLight(amb ? amb.sol : cine ? 0xFFC48A : 0xffffff, amb ? amb.solI : cine ? 2.4 : 2.2);
   sol.position.set(6, 12, 8); sol.castShadow = true;
   sol.shadow.mapSize.set(d.sombra_res || 2048, d.sombra_res || 2048);
   sol.shadow.bias = -0.0015; sol.shadow.normalBias = 0.03;
   escena.add(sol); escena.add(sol.target);
   if (d.suelo !== null && d.suelo !== false) {
     const suelo = new THREE.Mesh(new THREE.CircleGeometry(60, 64),
-      cine ? new THREE.MeshStandardMaterial({ color: new THREE.Color(d.suelo_cine || '#3A2C22'), roughness: 0.85 }) : material(d.suelo || '#9BD36A'));
+      cine ? new THREE.MeshStandardMaterial({ color: new THREE.Color(d.suelo_cine || (amb ? amb.suelo : '#3A2C22')), roughness: 0.85 }) : material(d.suelo || '#9BD36A'));
     suelo.rotation.x = -Math.PI / 2; suelo.position.y = d.altura_suelo || 0; suelo.receiveShadow = true;
     suelo.userData.outlineParameters = { visible: false };
     escena.add(suelo);
@@ -180,6 +358,16 @@ window.preparar = async (d, ancho, alto) => {
         continue;
       } catch (err) { console.log('modelo no cargó', o.archivo, err); }
     }
+    const especial = { personaje, cuarto, serie_luces: serieLuces, foco, bokeh: bokehFondo }[o.forma];
+    if (especial) {
+      const g = especial(o);
+      g.position.set(...(o.pos || [0, 0, 0]));
+      const r = o.rot || [0, 0, 0]; g.rotation.set(R(r[0]), R(r[1]), R(r[2]));
+      objetos[o.id || ('x' + Math.random())] = g;
+      base[o.id] = { pos: g.position.clone(), rot: g.rotation.clone(), escala: 1, color: null, malla: null, cabeza: g.userData.cabeza, cabRot: g.userData.cabeza ? g.userData.cabeza.rotation.clone() : null };
+      (o.padre && objetos[o.padre] ? objetos[o.padre] : escena).add(g);
+      continue;
+    }
     const m = new THREE.Mesh(geometria(o), cine ? materialCine(o) : material(o.color, o.transparente ? { transparent: true, opacity: 0.45 } : {}));
     m.castShadow = true; m.receiveShadow = true;
     const g = new THREE.Group(); g.add(m);
@@ -192,7 +380,8 @@ window.preparar = async (d, ancho, alto) => {
   }
   // la sombra se ajusta al tamaño de lo que hay en escena, para que salga nítida
   const caja = new THREE.Box3();
-  for (const id in objetos) caja.expandByObject(objetos[id]);
+  for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'bokeh', 'serie_luces'].includes(o.forma)) caja.expandByObject(objetos[o.id]);
+  if (caja.isEmpty()) for (const id in objetos) caja.expandByObject(objetos[id]);
   if (!caja.isEmpty()) {
     const centro = caja.getCenter(new THREE.Vector3()), radio = Math.max(1, caja.getSize(new THREE.Vector3()).length() * 0.7);
     sol.target.position.copy(centro);
@@ -204,15 +393,16 @@ window.preparar = async (d, ancho, alto) => {
     // sol bajo y cálido entrando por una persiana, más la luz principal suave
     sol.shadow.radius = 6; sol.shadow.blurSamples = 12;
     const centro = sol.target.position.clone();
-    const rayo = new THREE.SpotLight(0xFFC27A, 22, 0, Math.PI / 7, 0.4, 1.2);
+    const rayo = new THREE.SpotLight(0xFFC27A, amb ? 0 : 22, 0, Math.PI / 7, 0.4, 1.2);
     rayo.position.copy(centro).add(new THREE.Vector3(-6, 5, 3)); rayo.target.position.copy(centro);
-    rayo.map = persianas(); rayo.castShadow = !d.sin_sombra_rayo; rayo.shadow.mapSize.set(1024, 1024); rayo.shadow.bias = -0.001;
+    rayo.map = persianas(); rayo.castShadow = !d.sin_sombra_rayo && !amb; rayo.visible = !amb; rayo.shadow.mapSize.set(1024, 1024); rayo.shadow.bias = -0.001;
     escena.add(rayo); escena.add(rayo.target);
     compositor = new EffectComposer(renderer);
     compositor.addPass(new RenderPass(escena, camara));
     if (d.desenfoque) { bokeh = new BokehPass(escena, camara, { focus: 5, aperture: d.desenfoque, maxblur: 0.006 }); compositor.addPass(bokeh); }
-    compositor.addPass(new UnrealBloomPass(new THREE.Vector2(ancho / 4, alto / 4), 0.3, 0.5, 0.9));
+    compositor.addPass(new UnrealBloomPass(new THREE.Vector2(ancho / 4, alto / 4), amb ? amb.bloom : 0.3, 0.5, amb ? 0.75 : 0.9));
     grano = new ShaderPass(GradoCine); compositor.addPass(grano);
+    if (amb) { grano.uniforms.grano.value = amb.grano; grano.uniforms.vineta.value = amb.vineta; grano.uniforms.tinte.value.set(...amb.tinte); }
     compositor.addPass(new OutputPass());
   }
   for (const e of d.etiquetas || []) {
@@ -260,6 +450,23 @@ window.cuadro = (u) => {
       const p = 0.5 + 0.5 * Math.sin((u - t0) * 40);
       b.malla.material.color.copy(b.color).lerp(new THREE.Color(an.color || '#FFD23F'), 0.35 + 0.45 * p);
     }
+  }
+  for (const L of luces) {  // el pecho late cuando su personaje habla; los focos pueden parpadear
+    let k = 1;
+    const tramos = (def.habla || {})[L.id];
+    if (L.tipo === 'pecho') {
+      k = 0.75;
+      if (tramos) for (const [a, b] of tramos) if (u >= a && u <= b) k = 1.25 + 0.35 * Math.sin(u * 90 + a * 7);
+    }
+    for (const an of def.animar || []) if (an.id === L.id && an.parpadeo && u >= (an.t0 ?? 0) && u <= (an.t1 ?? 1)) {
+      const r = Math.sin(u * 211.0) * Math.sin(u * 97.0 + 1.3); k *= r > 0.35 ? 0.05 : 1;
+    }
+    for (const an of def.animar || []) if (an.id === L.id && an.apagar && u >= (an.t0 ?? 0)) k *= Math.max(0, 1 - (u - (an.t0 ?? 0)) / 0.06);
+    L.luz.intensity = L.base * k; L.malla.visible = k > 0.08;
+  }
+  for (const id in base) {  // giro de cabeza: "mirar" voltea la cabeza del personaje
+    const b = base[id]; if (!b.cabeza) continue; b.cabeza.rotation.copy(b.cabRot);
+    for (const an of def.animar || []) if (an.id === id && an.mirar) { const k = suave((u - (an.t0 ?? 0)) / Math.max(1e-3, (an.t1 ?? 1) - (an.t0 ?? 0))); b.cabeza.rotation.y += R(an.mirar[1] || 0) * k; b.cabeza.rotation.x += R(an.mirar[0] || 0) * k; }
   }
   for (const { s, e } of sprites) {
     const t0 = e.t0 ?? 0.15; const k = rebote(Math.min(1, Math.max(0, (u - t0) / 0.12)));

@@ -153,7 +153,8 @@ SET
 Ambientes: terror (luz fría violeta, niebla), noche (azul profundo con luces de fiesta), interior (cálido de casa).
 
 ESCENA
-{{"desde": "2 o 3 palabras EXACTAS de una línea, en orden", "set": "patio",
+{{"linea": número de la línea donde empieza la escena (1 a N, el de la lista numerada), "desde": "2 o 3 palabras EXACTAS de esa línea",
+  "set": "patio",
   "toma": [{{"t": 0, "pos": [x,y,z], "mira": [x,y,z]}}, {{"t": 1, "pos": [...], "mira": [...]}}],
   "ocultar": ["ids que no deben salir en esta toma"], "extra": [objetos solo de esta toma],
   "animar": [{{"id": "", "t0": 0, "t1": 1, "girar": [0,40,0] | "mover": [x,y,z] | "mirar": [0,35,0] | "parpadeo": true | "apagar": true}}],
@@ -174,7 +175,12 @@ LENGUAJE DE CÁMARA (como los cortos de referencia)
 - Cada línea de diálogo tiene al menos una toma de quien la dice. Cada "plantar" tiene un inserto.
 
 REGLAS
-- La primera escena no lleva "desde". Todo "desde" copia palabras que aparecen tal cual en las líneas y en orden.
+- Toda escena lleva "linea" (la primera es la 1). Varias escenas pueden caer en la misma línea larga; van en orden.
+- Todo "desde" copia palabras que aparecen tal cual en esa línea.
+- PERSONAJES VIVOS: nunca alineados mirando a cámara como en foto. Se miran entre sí (en amor, girados 25 a 45 grados uno
+  hacia el otro), están sentados, recargados o caminando según la acción, y cambian de pose entre sets o momentos
+  ("pose" distinta en "extra" con el mismo id no se permite: usa otro set o "animar" con "mover", "girar" o "mirar").
+- Cada escena tiene una "toma" con movimiento real de cámara (0.3 a 0.8 m entre t=0 y t=1) y ninguna dura más de 4 segundos.
 - Las escenas van en el orden del guion. 18 a 30 escenas.
 - JSON compacto, números con máximo 2 decimales.
 

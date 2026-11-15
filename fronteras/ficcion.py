@@ -34,6 +34,19 @@ COLORES_DIALOGO = ["#F5A8C8", "#B8A9FF", "#9FE0C8", "#FFD08A"]
 FORMAS_REALES = ("personaje", "cuarto", "serie_luces", "foco", "bokeh")
 
 
+def _otro_angulo(camara):
+    """La misma escena vista desde el otro lado y más cerca: para partir tomas largas sin que se sientan iguales."""
+    try:
+        a, b = camara[0], camara[-1]
+        mira = b.get("mira", [0, 1, 0])
+        def girar(p, k):
+            dx, dz = p[0] - mira[0], p[2] - mira[2]
+            return [round(mira[0] - dx * 0.75, 2), p[1], round(mira[2] + dz * 0.75 * k, 2)]
+        return [{"t": 0, "pos": girar(b["pos"], 1), "mira": mira}, {"t": 1, "pos": girar(a["pos"], 0.9), "mira": a.get("mira", mira)}]
+    except Exception:
+        return camara
+
+
 class Corto(Short):
     def __init__(self, spec, voz):
         self.spec, self.voz = spec, voz
@@ -94,20 +107,78 @@ class Corto(Short):
             escenas[0].pop("desde")
         self.spec = dict(self.spec, escenas=escenas)
 
+    def _inicios_de_linea(self):
+        """Segundo en que empieza y termina cada línea del guion, contando sus palabras sobre la voz grabada."""
+        pal = self.voz.palabras
+        lineas = self.spec.get("lineas") or []
+        inicios, k = [], 0
+        for ln in lineas:
+            n = len([w for w in str(ln.get("texto", "")).split() if "[" not in w and "]" not in w])
+            if k >= len(pal):
+                break
+            fin = min(len(pal), k + max(1, n))
+            inicios.append((pal[k]["t0"], pal[fin - 1]["t1"]))
+            k = fin
+        return inicios
+
     def _resolver(self):
-        """Tiempos de cada escena según la voz; una escena cuya frase no se dice se descarta."""
-        buenas, t_prev = [], 0.0
-        for i, e in enumerate(self.spec["escenas"]):
-            try:
-                t0 = 0.0 if not buenas else self.voz.corte(e["desde"], t_prev)
-            except (ValueError, KeyError):
-                continue
-            t_prev = t0
-            buenas.append(dict(e, _t0=t0, camara=[0, 0, 100]))
+        """Tiempos de cada escena: por número de línea, si no por sus palabras exactas, y si nada coincide
+        se reparten parejo entre sus vecinas. Ninguna escena se pierde (antes una frase mal copiada dejaba
+        toda la historia en una sola toma congelada)."""
+        escenas = [dict(e, camara=[0, 0, 100]) for e in self.spec["escenas"]]
+        inicios = self._inicios_de_linea()
+        tiempos, t_prev = [], 0.0
+        for i, e in enumerate(escenas):
+            t = None
+            if i == 0:
+                t = 0.0
+            elif isinstance(e.get("linea"), (int, float)) and inicios and 1 <= int(e["linea"]) <= len(inicios):
+                t = max(0.0, inicios[int(e["linea"]) - 1][0] - 0.2)
+            if t is None and e.get("desde"):
+                try:
+                    t = self.voz.corte(e["desde"], t_prev)
+                except (ValueError, KeyError):
+                    t = None
+            if t is not None and tiempos and any(x is not None and t <= x for x in tiempos):
+                t = None  # fuera de orden: se acomoda abajo
+            tiempos.append(t)
+            if t is not None:
+                t_prev = t
+        # escenas que comparten tiempo o no lo tienen: se reparten parejo entre las conocidas
+        fin_total = self.voz.duracion
+        i = 0
+        while i < len(tiempos):
+            if tiempos[i] is None:
+                j = i
+                while j < len(tiempos) and tiempos[j] is None:
+                    j += 1
+                a = tiempos[i - 1] if i > 0 else 0.0
+                b = tiempos[j] if j < len(tiempos) else fin_total
+                paso = (b - a) / (j - i + 1)
+                for k in range(i, j):
+                    tiempos[k] = round(a + paso * (k - i + 1), 3)
+                i = j
+            i += 1
+        for e, t in zip(escenas, tiempos):
+            e["_t0"] = t
         from .motor import _sin_relampagos
-        self.escenas = _sin_relampagos(buenas) or [{"tipo": "pantalla", "_t0": 0.0, "camara": [0, 0, 100]}]
+        self.escenas = _sin_relampagos(escenas, minimo=1.4) or [{"tipo": "pantalla", "_t0": 0.0, "camara": [0, 0, 100]}]
         for i, e in enumerate(self.escenas):
             e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else self.voz.duracion + 0.6
+        # una toma nunca dura demasiado: si pasa de 6 s se parte en dos con otro ángulo
+        partidas = []
+        for e in self.escenas:
+            dur = e["_t1"] - e["_t0"]
+            if dur > 6.5 and isinstance(e.get("modelo"), dict):
+                mitad = e["_t0"] + dur / 2
+                a = dict(e, _t1=mitad)
+                b = copy.deepcopy(e)
+                b["_t0"] = mitad
+                b["modelo"]["camara"] = _otro_angulo(b["modelo"].get("camara"))
+                partidas += [a, b]
+            else:
+                partidas.append(e)
+        self.escenas = partidas
 
     def _resolver_broll(self):
         pass
@@ -126,6 +197,7 @@ class Corto(Short):
                 if q in ids and e["_t0"] <= w["t0"] < e["_t1"]:
                     habla.setdefault(q, []).append([round((w["t0"] - e["_t0"]) / dur, 4), round((w["t1"] - e["_t0"]) / dur, 4)])
             m["habla"] = habla
+            m["_dur"] = round(dur, 3)
 
     def _sin_figuras(self, hay_catalogo):
         """En los cortos los personajes, cuartos y luces son parte del dibujo: solo se quitan objetos del catálogo

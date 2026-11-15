@@ -182,13 +182,18 @@ function personaje(o) {
   // brazos: hombro y codo
   const brazo = (lado, i) => {
     const h = articulacion(torso, lado * 0.23, 0.56, 0); h.rotation.x = R(p.hombro[i]); h.rotation.z = R(lado * 6);
+    if (raiz.userData.partes) raiz.userData.partes.hombros.push(h);
     h.add(pieza(new THREE.CylinderGeometry(0.055, 0.048, 0.3, 5), mat, 0, -0.15, 0));
     const c = articulacion(h, 0, -0.3, 0); c.rotation.x = R(p.codo[i]);
     if (p.cruzar) { h.rotation.y = R(-lado * 25); c.rotation.y = R(-lado * 70); }
     c.add(pieza(new THREE.CylinderGeometry(0.046, 0.04, 0.28, 5), mat, 0, -0.14, 0));
     c.add(pieza(new THREE.IcosahedronGeometry(0.05, 0), mat, 0, -0.3, 0));
+    if (raiz.userData.partes) raiz.userData.partes.codos.push(c);
   };
+  raiz.userData.partes = { torso, cab, hombros: [], codos: [], fase: (o.id || 'x').length * 1.7 };
   brazo(-1, 0); brazo(1, 1);
+  const pt = raiz.userData.partes;
+  pt.base = { torso: torso.rotation.clone(), cab: cab.rotation.clone(), hombros: pt.hombros.map(h => h.rotation.clone()), codos: pt.codos.map(c => c.rotation.clone()) };
   const pierna = (lado, i) => {
     const h = articulacion(cadera, lado * 0.1, 0, 0); h.rotation.x = R(p.cadera[i]);
     h.add(pieza(new THREE.CylinderGeometry(0.08, 0.065, 0.45, 5), matOscuro, 0, -0.225, 0));
@@ -367,7 +372,7 @@ window.preparar = async (d, ancho, alto) => {
       g.position.set(...(o.pos || [0, 0, 0]));
       const r = o.rot || [0, 0, 0]; g.rotation.set(R(r[0]), R(r[1]), R(r[2]));
       objetos[o.id || ('x' + Math.random())] = g;
-      base[o.id] = { pos: g.position.clone(), rot: g.rotation.clone(), escala: 1, color: null, malla: null, cabeza: g.userData.cabeza, cabRot: g.userData.cabeza ? g.userData.cabeza.rotation.clone() : null };
+      base[o.id] = { pos: g.position.clone(), rot: g.rotation.clone(), escala: 1, color: null, malla: null, cabeza: g.userData.cabeza, cabRot: g.userData.cabeza ? g.userData.cabeza.rotation.clone() : null, partes: g.userData.partes || null };
       (o.padre && objetos[o.padre] ? objetos[o.padre] : escena).add(g);
       continue;
     }
@@ -427,6 +432,11 @@ function camaraEn(u) {
   const k = b.t > a.t ? suave((u - a.t) / (b.t - a.t)) : 0;
   const p = new THREE.Vector3(...a.pos).lerp(new THREE.Vector3(...b.pos), u < a.t ? 0 : k);
   const m = new THREE.Vector3(...(a.mira || [0, 0, 0])).lerp(new THREE.Vector3(...(b.mira || a.mira || [0, 0, 0])), u < a.t ? 0 : k);
+  // si la toma no se mueve, se le da un acercamiento lento (ninguna toma queda fija)
+  if (new THREE.Vector3(...ks[0].pos).distanceTo(new THREE.Vector3(...ks[ks.length - 1].pos)) < 0.25) {
+    const m0 = new THREE.Vector3(...(ks[0].mira || [0, 0, 0]));
+    p.lerp(m0, 0.14 * suave(u)); p.y += 0.06 * u;
+  }
   // vaivén leve para que la toma nunca quede quieta
   p.x += Math.sin(u * Math.PI * 2) * 0.08; p.y += Math.cos(u * Math.PI * 2) * 0.05;
   camara.position.copy(p); camara.lookAt(m);
@@ -467,8 +477,30 @@ window.cuadro = (u) => {
     for (const an of def.animar || []) if (an.id === L.id && an.apagar && u >= (an.t0 ?? 0)) k *= Math.max(0, 1 - (u - (an.t0 ?? 0)) / 0.06);
     L.luz.intensity = L.base * k; L.malla.visible = k > 0.08;
   }
+  // vida: los personajes respiran, mueven la cabeza y, cuando hablan, asienten y gesticulan; nadie se queda congelado
+  const seg = (def._dur || 4) * u;
+  for (const id in base) {
+    const pt = base[id].partes; if (!pt) continue;
+    pt.torso.rotation.copy(pt.base.torso); pt.cab.rotation.copy(pt.base.cab);
+    pt.hombros.forEach((h, i) => h.rotation.copy(pt.base.hombros[i])); pt.codos.forEach((c, i) => c.rotation.copy(pt.base.codos[i]));
+    const f = pt.fase;
+    pt.torso.rotation.x += 0.025 * Math.sin(seg * 1.7 + f);
+    pt.torso.rotation.z += 0.012 * Math.sin(seg * 0.9 + f);
+    pt.cab.rotation.y += 0.12 * Math.sin(seg * 0.6 + f * 2);
+    pt.cab.rotation.x += 0.03 * Math.sin(seg * 1.1 + f);
+    let habla = 0;
+    for (const [a, b] of ((def.habla || {})[id] || [])) if (u >= a - 0.02 && u <= b + 0.04) habla = 1;
+    if (habla) {
+      pt.cab.rotation.x += 0.07 * Math.sin(seg * 9 + f);
+      pt.cab.rotation.y += 0.05 * Math.sin(seg * 4.3 + f);
+      const g = 0.5 + 0.5 * Math.sin(seg * 3.1 + f);
+      if (pt.hombros[1]) pt.hombros[1].rotation.x -= R(22) * g;
+      if (pt.codos[1]) pt.codos[1].rotation.x -= R(28) * g;
+      if (pt.hombros[0]) pt.hombros[0].rotation.x -= R(8) * (1 - g);
+    }
+  }
   for (const id in base) {  // giro de cabeza: "mirar" voltea la cabeza del personaje
-    const b = base[id]; if (!b.cabeza) continue; b.cabeza.rotation.copy(b.cabRot);
+    const b = base[id]; if (!b.cabeza) continue; if (!b.partes) b.cabeza.rotation.copy(b.cabRot);
     for (const an of def.animar || []) if (an.id === id && an.mirar) { const k = suave((u - (an.t0 ?? 0)) / Math.max(1e-3, (an.t1 ?? 1) - (an.t0 ?? 0))); b.cabeza.rotation.y += R(an.mirar[1] || 0) * k; b.cabeza.rotation.x += R(an.mirar[0] || 0) * k; }
   }
   for (const { s, e } of sprites) {

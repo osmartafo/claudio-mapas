@@ -189,10 +189,62 @@ def _plantilla(texto, genero):
     return texto.format(leyes=LEYES, estructura=estructura, dopamina=DOPAMINA_FICCION).replace("GENERO", genero.upper())
 
 
+def _normalizar_lineas(datos):
+    """La IA a veces llama distinto a las cosas ("dialogo", "personaje", "linea" o "Nombre: texto").
+    Se aceptan todas las formas y se convierten a {"quien", "texto"} con el id de cada personaje."""
+    personajes = datos.get("personajes") or []
+    por_nombre = {}
+    for p in personajes:
+        if isinstance(p, dict) and p.get("id"):
+            por_nombre[str(p["id"]).lower()] = p["id"]
+            if p.get("nombre"):
+                por_nombre[str(p["nombre"]).lower()] = p["id"]
+    crudas = None
+    for k in ("lineas", "líneas", "dialogo", "diálogo", "dialogos", "guion", "script", "lines"):
+        if isinstance(datos.get(k), list) and datos[k]:
+            crudas = datos[k]
+            break
+    lineas = []
+    for x in crudas or []:
+        quien, texto = None, None
+        if isinstance(x, dict):
+            quien = x.get("quien") or x.get("personaje") or x.get("speaker") or x.get("nombre") or x.get("voz")
+            texto = x.get("texto") or x.get("linea") or x.get("línea") or x.get("dialogo") or x.get("text")
+        elif isinstance(x, str) and ":" in x:
+            quien, _, texto = x.partition(":")
+        elif isinstance(x, str):
+            quien, texto = "narrador", x
+        texto = str(texto or "").strip().strip('"')
+        if not texto:
+            continue
+        q = str(quien or "narrador").strip().lower()
+        q = "narrador" if q.startswith("narra") else por_nombre.get(q, q.replace(" ", "_"))
+        lineas.append({"quien": q, "texto": texto})
+    # todo "quien" que no exista como personaje se agrega, para que tenga voz y color
+    ids = {p.get("id") for p in personajes if isinstance(p, dict)}
+    for l in lineas:
+        if l["quien"] != "narrador" and l["quien"] not in ids:
+            personajes.append({"id": l["quien"], "nombre": l["quien"].replace("_", " ").title(), "voz": "hombre_joven"})
+            ids.add(l["quien"])
+    datos["personajes"] = personajes
+    return lineas
+
+
 def escribir_ficcion(tema, genero="terror", api_key=None, aviso=lambda *a: None):
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-    base = _llamar(cliente, _plantilla(PASO_FICCION, genero), f"Idea del corto: {tema}", 6000)
-    lineas = [l for l in base.get("lineas") or [] if str(l.get("texto", "")).strip()]
+    base, lineas = {}, []
+    for intento in range(2):  # si la primera respuesta llega incompleta, se pide otra vez y más directa
+        pedido = f"Idea del corto: {tema}" + ("" if not intento else
+                 "\n\nIMPORTANTE: tu respuesta anterior llegó incompleta. Responde SOLO el JSON, con escaleta breve y "
+                 "la lista \"lineas\" completa de 12 a 22 líneas.")
+        try:
+            base = _llamar(cliente, _plantilla(PASO_FICCION, genero), pedido, 12000)
+        except ValueError:
+            base = {}
+        lineas = _normalizar_lineas(base)
+        if len(lineas) >= 4:
+            break
+        print("Corto incompleto, claves recibidas:", list(base.keys())[:15], "líneas:", len(lineas))
     if len(lineas) < 4:
         raise ValueError("El guionista no devolvió el corto completo. Intenta de nuevo.")
     base["lineas"] = lineas
@@ -201,7 +253,8 @@ def escribir_ficcion(tema, genero="terror", api_key=None, aviso=lambda *a: None)
         aud = _llamar(cliente, _plantilla(PASO_AUDITORIA, genero), json.dumps(
             {k: base.get(k) for k in ("premisa", "personajes", "escaleta", "plantar_cosechar", "lineas", "resaltar", "cierre")},
             ensure_ascii=False), 5000)
-        nuevas = [l for l in aud.get("lineas") or [] if str(l.get("texto", "")).strip()]
+        aud.setdefault("personajes", base.get("personajes"))
+        nuevas = _normalizar_lineas(aud)
         ids = {p["id"] for p in base.get("personajes") or []} | {"narrador"}
         palabras = sum(len(l["texto"].split()) for l in nuevas)
         if nuevas and all(l.get("quien") in ids for l in nuevas) and 100 <= palabras <= 240:

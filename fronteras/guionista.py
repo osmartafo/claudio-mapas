@@ -5,6 +5,21 @@ import anthropic
 
 MODELO = os.environ.get("FRONTERAS_MODELO", "claude-haiku-5-5")
 
+DOPAMINA = """ESTRUCTURA DOPAMÍNICA (retención segundo a segundo, la regla que manda sobre todo lo demás)
+- 0 a 2 segundos: el gancho ABRE UN BUCLE de curiosidad que el cerebro necesita cerrar (algo imposible, una amenaza,
+  una pregunta concreta, algo que el espectador tiene enfrente y no es lo que cree). Nada de saludos ni contexto.
+- Antes del segundo 5: la promesa de que se va a resolver ("y la razón es más rara de lo que crees").
+- Una MICRO RECOMPENSA cada 5 a 8 segundos: un dato, una revelación, un susto o una frase que cambia lo que sabías.
+  Nunca más de 8 segundos sin algo nuevo.
+- Bucles anidados: antes de cerrar un bucle abre el siguiente ("pero eso no es lo más raro").
+- Rompe el patrón cada 2 o 3 frases: una frase cortísima después de una larga, una pregunta, una cifra exacta.
+- Escalada: cada recompensa es más fuerte que la anterior; la más grande va al final, nunca al principio.
+- Concreto y sensorial: cifras exactas, objetos, nombres, lugares. Lo vago no da dopamina.
+- Últimos 5 segundos: el pago que cierra el bucle del gancho, y la última frase conecta con la primera para que el
+  video se repita en bucle o deja una pregunta que invita a comentar.
+- Prohibido: "en este video", "hoy te voy a contar", "sabías que" genérico, despedidas, pedir like o suscripción."""
+
+
 SISTEMA = """Eres el guionista y director de FRONTERAS, un canal de YouTube de documentales cortos de historia y geografía.
 Personalidad del canal: documental premium, elegante y sobrio, como una serie de Netflix. Voz grave, ritmo ágil de short.
 Nada de chistes, nada de exageraciones, nada de clickbait barato. Curiosidad, rigor y belleza.
@@ -236,6 +251,8 @@ ESQUELETO (llénalo primero, es tu escaleta)
 - siembra: qué detalle del gancho se paga en el remate
 - cierre: la última frase conecta con la primera para que el video se vea en bucle
 
+""" + DOPAMINA + """
+
 GUION
 110 a 140 palabras, frases de 4 a 10 palabras, segunda persona, español de México natural, números escritos con letra.
 
@@ -256,6 +273,9 @@ Revisa en este orden y sé exigente, sin piedad con el guion
 6. ¿Cada frase se puede mostrar en pantalla?
 7. ¿Suena a persona de México hablando, con ritmo, o suena a texto escrito?
 8. ¿Los datos son concretos (una medida, un año, un material) y no vagos?
+9. ESTRUCTURA DOPAMÍNICA: ¿el gancho abre un bucle en 2 segundos? ¿Hay una micro recompensa cada 5 a 8 segundos
+   (unas 3 frases)? ¿Se abre un bucle nuevo antes de cerrar el anterior? ¿La recompensa más fuerte está al final?
+   ¿El cierre paga el gancho y conecta con la primera frase? Marca el tramo exacto donde el espectador se iría.
 
 Luego REESCRIBE el guion corrigiendo todo lo que encontraste. Conserva los datos verificados, la extensión (110 a 140 palabras)
 y los números con letra. Si algo ya funciona, protégelo.
@@ -372,3 +392,8 @@ def esqueleto(tema, api_key=None):
     """Para el comando /esqueleto: solo la escaleta y el guion, sin hacer video."""
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
     return _llamar(cliente, PASO_GUION, f"Tema del video: {tema}", 6000, buscar=True)
+
+
+# la estructura dopamínica manda en todos los guiones
+SISTEMA = SISTEMA + "\n\n" + DOPAMINA
+SISTEMA_CURIOSIDADES = SISTEMA_CURIOSIDADES + "\n\n" + DOPAMINA

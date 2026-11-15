@@ -49,12 +49,26 @@ ESTRUCTURA_AMOR = """ESTRUCTURA DE AMOR (corto de referencia de 70 a 90 segundos
 - Español de México natural, coloquial, alguna grosería suave si el personaje la diría. Líneas de 3 a 14 palabras.
 - Al final una reflexión escrita para la pantalla, de dos a tres frases, que diga la idea sin repetir el diálogo."""
 
+DOPAMINA_FICCION = """ESTRUCTURA DOPAMÍNICA (manda sobre todo lo demás: nadie debe deslizar al siguiente video)
+- Primeros 2 segundos: una frase que abre un bucle que el cerebro necesita cerrar (una regla, una anomalía, una frase
+  dicha a medias, un "no digas eso"). Cero contexto antes del gancho.
+- Una MICRO RECOMPENSA cada 5 a 8 segundos (unas 2 o 3 líneas): en terror un detalle que no cuadra, un ruido, una luz
+  que se apaga, un susto; en amor una revelación, un recuerdo concreto, una frase que pega o una risa.
+- Falsa calma: en terror deja un respiro corto justo antes del golpe más fuerte.
+- Bucles anidados: antes de cerrar un misterio abre el siguiente. La revelación más fuerte va al final.
+- Ritmo que cambia: una línea de dos palabras después de una larga; preguntas; silencios marcados con puntos.
+- Últimos 5 segundos: el golpe final cierra el bucle del gancho y deja una pregunta o una emoción que invita a comentar
+  o a volver a verlo.
+- Prohibido: introducciones, explicar el chiste o el miedo, despedidas, pedir like."""
+
 PASO_FICCION = """Eres guionista de cortometrajes animados verticales para un canal de shorts, con el método de guion de Zepfilms.
 Escribes un corto de GENERO a partir de la idea que te dan. Si la idea es vaga, elige la premisa más fuerte.
 
 {leyes}
 
 {estructura}
+
+{dopamina}
 
 REGLAS DE ESCRITURA
 - 140 a 200 palabras en total entre todas las líneas (el corto dura de 70 a 100 segundos).
@@ -93,8 +107,12 @@ Revisa en este orden y corrige:
 6. Lo que no se ve no existe: nada de pensamientos explicados.
 7. Golpe final corto y que reencuadre todo (terror) o invitación concreta y reflexión que no repita (amor).
 8. Largo total entre 140 y 200 palabras.
+9. Estructura dopamínica: gancho que abre un bucle en 2 segundos, una micro recompensa cada 2 o 3 líneas, bucles
+   anidados, lo más fuerte al final. Marca la línea exacta donde el espectador se iría y arréglala.
 
 {estructura}
+
+{dopamina}
 
 Responde SOLO con JSON
 {{"calificacion": 1 a 10, "problemas": ["máx 5, concretos"], "funciona": ["máx 3"],
@@ -162,7 +180,7 @@ COLOR_LUZ = {"amor": ["#4D8BFF", "#FF9A4D", "#FF6FAE"], "terror": [None, None, N
 
 def _plantilla(texto, genero):
     estructura = ESTRUCTURA_TERROR if genero == "terror" else ESTRUCTURA_AMOR
-    return texto.format(leyes=LEYES, estructura=estructura).replace("GENERO", genero.upper())
+    return texto.format(leyes=LEYES, estructura=estructura, dopamina=DOPAMINA_FICCION).replace("GENERO", genero.upper())
 
 
 def escribir_ficcion(tema, genero="terror", api_key=None, aviso=lambda *a: None):

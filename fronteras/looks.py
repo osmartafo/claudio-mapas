@@ -293,13 +293,13 @@ def acabado(short, c, t):
         f = fuente("HelveticaNowDisplay-Bold", 22)
         tinta = p["cfg"]["MARFIL"]
         m = (W - short.ANCHO_SEGURO) / 2
-        escribe(c, " ".join(marca.LEMA.upper().split()[:2]), m, 150, f, tinta, alfa=0.85, centro=False, sombra=0)
-        escribe(c, " ".join(marca.LEMA.upper().split()[2:]), m, 178, f, tinta, alfa=0.85, centro=False, sombra=0)
-        escribe(c, marca.NOMBRE, W / 2, 150, f, tinta, alfa=0.85, sombra=0)
+        # esquinas debajo de la barra de cine de STORY (la marca de agua ocupa la esquina derecha)
+        escribe(c, " ".join(marca.LEMA.upper().split()[:2]), m, 205, f, tinta, alfa=0.85, centro=False, sombra=0)
+        escribe(c, " ".join(marca.LEMA.upper().split()[2:]), m, 233, f, tinta, alfa=0.85, centro=False, sombra=0)
         anio = next((str(e.get("año")) for e in short.escenas if e.get("año") and e["_t0"] <= t), "")
         if anio:
             from .motor import mide
-            escribe(c, anio, W - m - mide(f, anio), 150, f, tinta, alfa=0.85, centro=False, sombra=0)
+            escribe(c, anio, W - 200 - mide(f, anio), 205, f, tinta, alfa=0.85, centro=False, sombra=0)
         # código de barras decorativo
         rng = np.random.default_rng(3)
         x = W / 2 - 60

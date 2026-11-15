@@ -122,7 +122,7 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     v = Voz.de_archivo(f"{carpeta}/palabras.json")
 
     aviso(3, "Componiendo la música")
-    musica.componer(v.duracion + (7.5 if ficcion else 3.2), f"{carpeta}/musica.wav",
+    musica.componer(v.duracion + (11.0 if ficcion else 4.8), f"{carpeta}/musica.wav",
                     semilla=int(est.get("musica", abs(hash(tema)) % 1000)), animo=spec.get("modo") if ficcion else None)
 
     aviso(4, "Animando las escenas" if ficcion else "Animando los mapas")

@@ -87,7 +87,9 @@ REPARTO = {
     "narradora_drama":   ["tBeo5yEkFpJY7qtZJzxf", "S5sGA291a7wLwgXoIAP8", "EXAVITQu4vr4xnSDxMaL"],
     "hombre_joven":      ["pC0w7bOSDTlgiOCrNBX3", "vPrtQbTwtAoP87VnQmID", "tBkfgTXKnmHoYewBvh7e"],
     "hombre_maduro":     ["HIkzxzvsigFIynXHHKhU", "LnGOA2SxH2fX1e1iNzEp", "tBkfgTXKnmHoYewBvh7e"],
+    "hombre_joven_b":    ["vPrtQbTwtAoP87VnQmID", "qXvyMc4erc4RzqXLpiiR", "JBFqnCBsd6RMkjVDRZzb"],
     "mujer_joven":       ["KVJNlB9xei0FCE8ekWnI", "spPXlKT5a4JMfbhPRAzA", "EXAVITQu4vr4xnSDxMaL"],
+    "mujer_joven_b":     ["spPXlKT5a4JMfbhPRAzA", "JYyJjNPfmNJdaby8LdZs", "XrExE9yKIg1WjnnlVkGX"],
     "mujer_madura":      ["z1ngDYs2H24Xsd8ts3az", "hHjbwzYZW17oh0p05AKv", "XrExE9yKIg1WjnnlVkGX"],
     "nino":              ["kKcRoM4gR6HLJt6Zupbs", "pC0w7bOSDTlgiOCrNBX3", "tBkfgTXKnmHoYewBvh7e"],
 }

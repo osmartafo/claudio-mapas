@@ -276,6 +276,37 @@ def aplicar_paleta(clave):
     return pal
 
 
+_BASES = {}
+
+
+def _base_lista(ruta, tinte, etiqueta=""):
+    """El mapa base enorme (10800x5400) se decodifica, se tiñe y se le hacen mipmaps UNA vez por video.
+    Antes se volvía a decodificar en cada cuadro y el look noche tardaba medio segundo por cuadro."""
+    filtro = tinte.getColorFilter()
+    clave = (ruta, etiqueta)
+    if clave in _BASES:
+        return _BASES[clave]
+    img = skia.Image.open(ruta)
+    try:
+        img = img.makeRasterImage()
+        if filtro is not None:
+            sup = skia.Surface(img.width(), img.height())
+            pinta = skia.Paint(tinte)
+            pinta.setAlphaf(1.0)
+            with sup as c:
+                c.drawImage(img, 0, 0, skia.SamplingOptions(), pinta)
+            img = sup.makeImageSnapshot()
+            del sup
+        if hasattr(img, "withDefaultMipmaps"):
+            img = img.withDefaultMipmaps()
+    except Exception as err:
+        print("mapa base sin preparar:", err)
+        return None
+    _BASES.clear()  # solo uno a la vez en memoria
+    _BASES[clave] = img
+    return img
+
+
 def _ajuste_luz(carpeta):
     """Mira tres cuadros de la toma: si está quemada regresa un factor para bajar la exposición, si está negra uno
     para subirla, y None si está bien."""
@@ -341,9 +372,15 @@ class Short:
         self.ANCHO_SEGURO = 860 if vertical else 1560
         self.K = math.cos(math.radians(spec.get("latitud_media", 30)))
         self.geo = Geo(self.K)
-        self.base = skia.Image.open(f"{DATOS}/{self.L.get('base', 'base_fronteras.jpg')}")
+        ruta_base = f"{DATOS}/{self.L.get('base', 'base_fronteras.jpg')}"
+        self.base = _base_lista(ruta_base, self._tinte, f"{self.clave_look}:{est.get('paleta', '')}")
+        if self.base is None:  # si no se pudo preparar, se dibuja como antes (más lento pero correcto)
+            self.base = skia.Image.open(ruta_base)
+            self._tinte_base = self._tinte
+        else:
+            self._tinte_base = skia.Paint(Alphaf=self._tinte.getAlphaf())  # el tinte ya viene aplicado en la imagen
         self.terr = spec.get("territorios", {})
-        self.duracion = voz.duracion + 3.2
+        self.duracion = voz.duracion + 4.4  # incluye la tarjeta final de STORY
         self._resolver()
         self._grano = self._hacer_grano()
         self.capas_relieve = []
@@ -595,7 +632,7 @@ class Short:
         c.concat(m)
         c.translate(-180 * self.K, -90)
         c.scale(self.K * 360 / self.base.width(), 180 / self.base.height())
-        c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear), self._tinte)
+        c.drawImage(self.base, 0, 0, skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear), self._tinte_base)
         c.restore()
         # relieve en alta resolución de la zona del video, encima del mapa base
         for img, (lon0, lat0, lon1, lat1) in self.capas_relieve:
@@ -746,7 +783,7 @@ class Short:
             return
         W = self.W
         L = self.L
-        y_base = (L.get("y_titulo", 300) if self.vertical else 150)
+        y_base = (max(L.get("y_titulo", 300), 360) if self.vertical else 190)  # debajo de la barra de cine
         sube = (1 - sale((t - e["_t0"] - 0.1) / 0.9)) * 26
         if e.get("año"):
             f_ano = L.get("f_ano", "HelveticaNowDisplay-Bold")
@@ -829,12 +866,13 @@ class Short:
         for i, g in enumerate(grupos):
             fin = grupos[i + 1][0]["t0"] if i + 1 < len(grupos) else g[-1]["t1"] + 0.6
             if g[0]["t0"] - 0.05 <= t < fin:
-                tam = (84 if getattr(self, "_subs_arriba", False) else 52) if self.vertical else 44
+                arriba = getattr(self, "_subs_arriba", False)
+                tam = (92 if arriba else 52) if self.vertical else 44
                 ps = [w["p"].strip("¿?¡!,.:;…").replace("...", "") for w in g]
-                if self.graf["mayusculas"]:
+                if self.graf["mayusculas"] and not arriba:
                     ps = [p.upper() for p in ps]
                 while True:  # se encoge hasta que la frase cabe completa en la zona segura
-                    f = fuente(self.L.get("f_sub", "HelveticaNowDisplay-Bold"), tam)
+                    f = fuente("DMSerifDisplay-Regular" if arriba else self.L.get("f_sub", "HelveticaNowDisplay-Bold"), tam)
                     esp = tam * 0.28
                     anchos = [mide(f, p) for p in ps]
                     total = sum(anchos) + esp * (len(ps) - 1)
@@ -842,8 +880,20 @@ class Short:
                         break
                     tam -= 2
                 x = self.W / 2 - total / 2
-                y = (360 if getattr(self, "_subs_arriba", False) else 1505) if self.vertical else 975
+                y = (430 if arriba else 1505) if self.vertical else 975
                 a = rampa(t, g[0]["t0"] - 0.05, 0.12)
+                if arriba:  # identidad STORY: regla dorada arriba y la palabra que se dice en cursiva del color del tipo
+                    from . import identidad
+                    identidad.regla(c, self.W / 2, 318, 140, a)
+                    fi = fuente("DMSerifDisplay-Italic", tam)
+                    for w, p, an in zip(g, ps, anchos):
+                        ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
+                        if ahora:
+                            escribe(c, p, x, y, fi, identidad.ACENTO["curiosidades"], alfa=a, centro=False, sombra=0.9)
+                        else:
+                            escribe(c, p, x, y, f, identidad.MARFIL, alfa=a, centro=False, sombra=0.9)
+                        x += an + esp
+                    return
                 if self.L.get("sub_banda"):  # banda oscura detrás de la frase, para mapas claros
                     c.drawRoundRect(skia.Rect.MakeXYWH(x - tam * 0.45, y - tam * 1.0, total + tam * 0.9, tam * 1.38), 16, 16,
                                     skia.Paint(AntiAlias=True, Color4f=col(self.L["sub_banda"], 0.62 * a)))
@@ -962,26 +1012,23 @@ class Short:
         gp = skia.Paint(Alphaf=self.graf["grano"], BlendMode=skia.BlendMode.kOverlay)
         c.drawImageRect(self._grano[int(t * FPS) % 4], skia.Rect(0, 0, W, H), skia.SamplingOptions(), gp)
 
+    def _genero(self):
+        if not hasattr(self, "_gen"):
+            self._gen = self.spec.get("modo") if self.spec.get("modo") in ("curiosidades", "mapas", "terror", "amor") else \
+                ("curiosidades" if any(e.get("tipo") == "3d" for e in self.escenas) else "mapas")
+        return self._gen
+
     def _marca(self, c, t):
-        f = fuente("HelveticaNowDisplay-Bold", 30 if self.vertical else 26)
-        y = self.H - 70 if self.vertical else self.H - 44
-        a = 0.6 * (1 - rampa(t, self.T_FIN, 0.4))
-        escribe(c, marca.NOMBRE, self.W / 2, y, f, MARFIL, alfa=a, espacio=9, sombra=0.5)
+        """Identidad STORY: barras de cine y marca de agua durante todo el video (la tarjeta final trae las suyas)."""
+        from . import identidad
+        a = 1 - rampa(t, self.T_FIN, 0.4)
+        identidad.barras(c, self.W, self.H, 1.0)
+        identidad.marca_de_agua(c, self.W, self.H, 0.8 * a)
 
     def _cierre(self, c, t):
-        a = rampa(t, self.T_FIN, 0.9)
-        if a <= 0:
-            return
-        W, H = self.W, self.H
-        c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col(NOCHE, 0.9 * a)))
-        cy = H / 2
-        f = fuente("HelveticaNowDisplay-Bold", 132 if self.vertical else 120)
-        escribe(c, marca.NOMBRE, W / 2, cy, f, MARFIL, alfa=a, espacio=22 * (0.6 + 0.4 * sale((t - self.T_FIN) / 1.6)))
-        lp = skia.Paint(AntiAlias=True, Color4f=col(ORO, a), StrokeWidth=2)
-        L = 180 * sale((t - self.T_FIN - 0.3) / 1.0)
-        c.drawLine(W / 2 - L, cy + 52, W / 2 + L, cy + 52, lp)
-        f2 = fuente("HelveticaNowDisplay-Regular", 46 if self.vertical else 40)
-        escribe(c, marca.LEMA, W / 2, cy + 128, f2, ORO_CLARO, alfa=rampa(t, self.T_FIN + 0.5, 0.8))
+        from . import identidad
+        identidad.tarjeta_final(c, self.W, self.H, t, self.T_FIN, self.duracion, self._genero(), self.spec.get("cierre"),
+                                self.spec.get("titulo"))
 
     # ---- un fotograma
     def dibujar(self, c, t):

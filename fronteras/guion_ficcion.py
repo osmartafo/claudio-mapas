@@ -36,6 +36,9 @@ ESTRUCTURA_TERROR = """ESTRUCTURA DE TERROR (cortos de referencia de 80 a 110 se
 - Opcional al final una pregunta al público con dos opciones (¿Tú qué harías? Abrir la puerta / Dejarla cerrada)."""
 
 ESTRUCTURA_AMOR = """ESTRUCTURA DE AMOR (corto de referencia de 70 a 90 segundos, sin narrador, solo diálogo)
+- PAREJAS DIVERSAS: el corto puede ser de una pareja de hombre y mujer, de dos hombres (gay), de dos mujeres (sáfica)
+  o de amistad. Si la idea no lo dice, alterna entre ellas. Escríbelas igual que cualquier historia de amor, con ternura,
+  humor y verdad, sin estereotipos ni drama por ser quienes son: el conflicto es el del amor, no el de su orientación.
 - Dos personajes de noche en un lugar tranquilo (una fiesta a lo lejos, una alberca, una azotea, un coche estacionado,
   la banca de un parque). Uno está apagado por algo que no dice (una ruptura, una distancia, una pérdida) y el otro
   lo conoce de años y lo acompaña con humor.
@@ -47,7 +50,8 @@ ESTRUCTURA_AMOR = """ESTRUCTURA DE AMOR (corto de referencia de 70 a 90 segundos
   "Y eso sigue ahí."
 - Cierre con una invitación de vuelta a la vida, ligera y concreta ("Nos falta uno en el beer pong." / "Vamos, pues.").
 - Español de México natural, coloquial, alguna grosería suave si el personaje la diría. Líneas de 3 a 14 palabras.
-- Al final una reflexión escrita para la pantalla, de dos a tres frases, que diga la idea sin repetir el diálogo."""
+- Al final una reflexión escrita para la pantalla, de dos a tres frases, que diga la idea sin repetir el diálogo.
+  En amor el "cierre" SIEMPRE es {"tipo": "reflexion", "texto": "..."}."""
 
 DOPAMINA_FICCION = """ESTRUCTURA DOPAMÍNICA (manda sobre todo lo demás: nadie debe deslizar al siguiente video)
 - Primeros 2 segundos: una frase que abre un bucle que el cerebro necesita cerrar (una regla, una anomalía, una frase
@@ -80,8 +84,10 @@ REGLAS DE ESCRITURA
 - Nada de violencia gráfica ni sangre explícita: el miedo sale de lo que no cuadra y de lo que no se ve.
 
 VOCES DISPONIBLES (campo "voz" de cada personaje)
-narrador_suspenso (hombre, narrador de terror), narradora_drama (mujer, narradora), hombre_joven, hombre_maduro,
-mujer_joven, mujer_madura, nino.
+narrador_suspenso (hombre, narrador de terror), narradora_drama (mujer, narradora), hombre_joven, hombre_joven_b,
+hombre_maduro, mujer_joven, mujer_joven_b, mujer_madura, nino.
+Dos personajes NUNCA comparten voz: si los dos son hombres jóvenes usa hombre_joven y hombre_joven_b; si son dos mujeres
+jóvenes usa mujer_joven y mujer_joven_b.
 
 Responde SOLO con JSON
 {{"titulo": "título corto que intrigue, máx 60 caracteres", "descripcion": "2 frases y 3 hashtags",

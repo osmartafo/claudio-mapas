@@ -110,4 +110,10 @@ AMOR = [
     "Corto de amor: el coche estacionado afuera de su casa",
     "Corto de amor: la amistad que se volvió otra cosa",
     "Corto de amor: aprender a estar solo en una fiesta",
+    "Corto de amor: dos chavos que se conocieron en el metro",
+    "Corto de amor: la primera vez que le dijo a su mamá que es su novio",
+    "Corto de amor: dos amigas que se dan cuenta en la boda de otra",
+    "Corto de amor: ella guardó la playlist que le hizo su ex novia",
+    "Corto de amor: él le enseñó a bailar cumbia en la cocina",
+    "Corto de amor: las dos se quedaron en la azotea hasta el amanecer",
 ]

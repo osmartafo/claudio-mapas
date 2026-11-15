@@ -112,12 +112,15 @@ function geometria(o) {
 
 function texto(t, color = '#111111', fondo = '#ffffff') {
   const c = document.createElement('canvas'), x = c.getContext('2d');
-  const f = 64; x.font = `800 ${f}px Helvetica, Arial, sans-serif`;
-  const w = Math.ceil(x.measureText(t).width) + 60; c.width = w; c.height = f + 44;
-  x.font = `800 ${f}px Helvetica, Arial, sans-serif`;
-  x.fillStyle = fondo; x.strokeStyle = '#111'; x.lineWidth = 8;
-  const rr = 26; x.beginPath(); x.roundRect(4, 4, w - 8, c.height - 8, rr); x.fill(); x.stroke();
-  x.fillStyle = color; x.textBaseline = 'middle'; x.fillText(t, 30, c.height / 2 + 2);
+  // estilo STORY: etiqueta oscura translúcida con filo dorado y texto dorado en mayúsculas espaciadas
+  t = String(t).toUpperCase();
+  const f = 54; x.font = `600 ${f}px "IBM Plex Mono", Menlo, monospace`;
+  const w = Math.ceil(x.measureText(t).width + t.length * 6) + 70; c.width = w; c.height = f + 50;
+  x.font = `600 ${f}px "IBM Plex Mono", Menlo, monospace`;
+  x.fillStyle = 'rgba(10,10,12,0.72)'; x.strokeStyle = '#C9A24A'; x.lineWidth = 3;
+  x.beginPath(); x.roundRect(3, 3, w - 6, c.height - 6, 6); x.fill(); x.stroke();
+  x.fillStyle = '#E6C77A'; x.textBaseline = 'middle';
+  let px = 35; for (const ch of t) { x.fillText(ch, px, c.height / 2 + 2); px += x.measureText(ch).width + 6; }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, sizeAttenuation: false }));
   s.userData.aspecto = w / c.height; s.renderOrder = 10; return s;

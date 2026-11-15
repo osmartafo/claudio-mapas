@@ -28,7 +28,7 @@ import skia
 from . import marca
 from .motor import Short, col, clamp, sale, rampa, fuente, escribe, mide, parte_lineas, FPS, FPS_3D
 
-ROJO = "#E5484D"
+ROJO = "#C8323A"  # carmesí STORY
 BLANCO = "#F4F1EA"
 COLORES_DIALOGO = ["#F5A8C8", "#B8A9FF", "#9FE0C8", "#FFD08A"]
 FORMAS_REALES = ("personaje", "cuarto", "serie_luces", "foco", "bokeh")
@@ -46,7 +46,8 @@ class Corto(Short):
         self.graf = {"subtitulo": "", "mayusculas": False, "grano": 0.0}
         self.creditos = []
         self.cierre = spec.get("cierre") or {}
-        self.duracion = voz.duracion + (7.0 if self.cierre else 3.2)
+        # tarjeta final de STORY (y antes la reflexión escrita en amor)
+        self.duracion = voz.duracion + (10.5 if self.cierre.get("tipo") == "reflexion" else 6.0)
         self._expandir_sets()
         self._resolver()
         self.T_FIN = voz.duracion + 0.4
@@ -171,7 +172,7 @@ class Corto(Short):
                 tam, nombre, y = 82, "Anton-Regular", self.H * 0.735
             else:
                 ps = [w["p"] for w in g]
-                tam, nombre, y = 66, "HelveticaNowDisplay-ExtraBold", self.H * 0.66
+                tam, nombre, y = 62, "DMSerifDisplay-Regular", self.H * 0.70
             while True:
                 f = fuente(nombre, tam)
                 esp = tam * 0.26
@@ -186,8 +187,18 @@ class Corto(Short):
                 p = skia.Paint(AntiAlias=True, Color4f=col("#0A0A10", (0.55 if self.genero == "terror" else 0.35) * a))
                 p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 14))
                 c.drawRoundRect(caja, 18, 18, p)
+            if self.genero != "terror":
+                from . import identidad
+                identidad.regla(c, self.W / 2, y - tam * 1.55, 140, a)
+                fi = fuente("DMSerifDisplay-Italic", tam)
             for j, (w, pal, an) in enumerate(zip(g, ps, anchos)):
                 dicha = t >= w["t0"] - 0.03
+                if self.genero != "terror":
+                    ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
+                    escribe(c, pal, x, y, fi if ahora else f, "#D98A97" if ahora else "#EDE6D6", alfa=a * (1.0 if dicha else 0.0),
+                            centro=False, sombra=0.9)
+                    x += an + esp
+                    continue
                 clave = self._es_clave(w, j == len(g) - 1) and quien == "narrador" and self.genero == "terror"
                 cw = ROJO if (clave and dicha) else color
                 alfa = a * (1.0 if dicha else (0.28 if self.genero == "terror" else 0.0))
@@ -197,26 +208,28 @@ class Corto(Short):
 
     # ---- letrero de lugar y hora (arriba a la izquierda), la hora avanza con las escenas
     def _sello(self, c, t):
-        lugar = self.spec.get("lugar")
-        if not lugar:
-            return
+        """Sello STORY arriba a la izquierda: lugar y hora en terror, capítulo y hora en amor."""
+        from . import identidad
         hora = self.spec.get("hora_inicio", "")
         for e in self.escenas:
             if e["_t0"] <= t and e.get("hora"):
                 hora = e["hora"]
+        if self.genero == "terror":
+            texto = " · ".join(x for x in (str(self.spec.get("lugar") or "").upper(), str(hora).upper()) if x)
+        else:
+            romanos = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+            import zlib
+            cap = self.spec.get("capitulo") or romanos[zlib.crc32(str(self.spec.get("titulo", "")).encode()) % len(romanos)]
+            texto = " · ".join(x for x in ("CAPÍTULO " + str(cap), str(hora).upper()) if x.strip())
         a = rampa(t, 0.3, 0.6) * (1 - rampa(t, self.T_FIN, 0.4))
-        f = fuente("IBMPlexMono-Medium", 30)
-        escribe(c, str(lugar).upper(), 72, 150, f, BLANCO, alfa=0.85 * a, espacio=4, centro=False, sombra=0.8)
-        f2 = fuente("IBMPlexMono-Medium", 40)
-        escribe(c, hora, 72, 198, f2, BLANCO, alfa=0.95 * a, centro=False, sombra=0.8)
-        c.drawRect(skia.Rect.MakeXYWH(72, 214, 150, 2), skia.Paint(Color4f=col(BLANCO, 0.5 * a)))
+        identidad.sello(c, texto, self.genero, a)
 
     def _alerta(self, c, t, e):
         texto = e.get("alerta")
         if not texto:
             return
         k = sale((t - e["_t0"]) / 0.3)
-        y = 250 - 120 * (1 - k)
+        y = 300 - 120 * (1 - k)
         r = skia.Rect.MakeXYWH(140, y, self.W - 280, 120)
         c.drawRoundRect(r, 18, 18, skia.Paint(AntiAlias=True, Color4f=col("#C8262E", 0.95)))
         escribe(c, "⚠  ALERTA EXTREMA", 175, y + 46, fuente("HelveticaNowDisplay-Bold", 30), "#FFFFFF", centro=False, sombra=0)
@@ -299,46 +312,36 @@ class Corto(Short):
             escribe(c, nombre, x0 + 80, y0 + 540, fb(32), "#FFFFFF", alfa=an, centro=False, sombra=0)
             escribe(c, str(p.get("texto", "Nota de voz (0:03)"))[:34], x0 + 80, y0 + 590, fr(30), "#D0D0DA", alfa=an, centro=False, sombra=0)
 
-    # ---- tarjeta final
+    # ---- tarjeta final: en amor primero la reflexión escrita, luego el título STORY
     def _cierre(self, c, t):
-        a = rampa(t, self.T_FIN, 0.8)
-        if a <= 0:
-            return
-        W, H = self.W, self.H
-        c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col("#05050A", 0.86 * a)))
+        from . import identidad
         cz = self.cierre
-        if cz.get("tipo") == "encuesta":
-            fp = fuente("Anton-Regular", 110)
-            escribe(c, str(cz.get("pregunta", "¿Tú qué harías?")).upper(), W / 2, H * 0.40, fp, "#FFFFFF", alfa=a)
-            for i, (op, colr) in enumerate(zip((cz.get("opciones") or ["Abrir", "Dejarla cerrada"])[:2], ("#C8262E", "#2F5D8A"))):
-                ab = rampa(t, self.T_FIN + 0.5 + i * 0.25, 0.4)
-                r = skia.Rect.MakeXYWH(W / 2 - 330, H * 0.47 + i * 150, 660, 118)
-                c.drawRoundRect(r, 20, 20, skia.Paint(AntiAlias=True, Color4f=col(colr, ab)))
-                escribe(c, str(op).upper(), W / 2, H * 0.47 + i * 150 + 76, fuente("HelveticaNowDisplay-ExtraBold", 46), "#FFFFFF", alfa=ab, sombra=0)
-            escribe(c, "Comenta abajo ↓", W / 2, H * 0.47 + 360, fuente("HelveticaNowDisplay-Bold", 42), "#FFD23F", alfa=rampa(t, self.T_FIN + 1.2, 0.5))
-        elif cz.get("tipo") == "reflexion":
-            f = fuente("HelveticaNowDisplay-Bold", 46)
-            parrafos = [p for p in re.split(r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", str(cz.get("texto", ""))) if p.strip()]
-            mitad = max(1, len(parrafos) // 2)
-            bloques = [" ".join(parrafos[:mitad]), " ".join(parrafos[mitad:])] if len(parrafos) > 1 else parrafos
-            y = H * 0.36
-            if self.spec.get("titulo"):
-                escribe(c, self.spec["titulo"], W / 2, y - 120, fuente("HelveticaNowDisplay-Regular", 34), "#B8B8C8", alfa=a)
-            for i, b in enumerate(bloques):
-                ab = rampa(t, self.T_FIN + 0.6 + i * 2.4, 0.9)
-                for j, l in enumerate(parte_lineas(f, b, 860)):
-                    escribe(c, l, W / 2, y, f, "#FFFFFF", alfa=ab, sombra=0.6)
-                    y += 62
-                y += 50
-        else:
-            escribe(c, self.spec.get("titulo", ""), W / 2, H * 0.47, fuente("Anton-Regular", 84), "#FFFFFF", alfa=a)
-        am = rampa(t, self.duracion - 2.2, 0.6)
-        escribe(c, marca.NOMBRE, W / 2, H - 260, fuente("HelveticaNowDisplay-Bold", 44), "#FFFFFF", alfa=0.8 * am, espacio=12)
+        t_titulo = self.T_FIN
+        if cz.get("tipo") == "reflexion" and cz.get("texto"):
+            t_titulo = self.T_FIN + 4.6
+            a = rampa(t, self.T_FIN, 0.8) * (1 - rampa(t, t_titulo - 0.3, 0.5))
+            if a > 0:
+                W, H = self.W, self.H
+                c.drawRect(skia.Rect(0, 0, W, H), skia.Paint(Color4f=col("#0A0A0C", 0.82 * a)))
+                f = fuente("DMSerifDisplay-Italic", 50)
+                parrafos = [p for p in re.split(r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", str(cz["texto"])) if p.strip()]
+                mitad = max(1, len(parrafos) // 2)
+                bloques = [" ".join(parrafos[:mitad]), " ".join(parrafos[mitad:])] if len(parrafos) > 1 else parrafos
+                y = H * 0.38
+                identidad.regla(c, W / 2, y - 90, 140, a)
+                for i, b in enumerate(bloques):
+                    ab = a * rampa(t, self.T_FIN + 0.5 + i * 1.8, 0.8)
+                    for l in parte_lineas(f, b, 860):
+                        escribe(c, l, W / 2, y, f, "#EDE6D6", alfa=ab, sombra=0.6)
+                        y += 68
+                    y += 46
+                identidad.barras(c, W, H, a)
+        identidad.tarjeta_final(c, self.W, self.H, t, t_titulo, self.duracion, self.genero, cz, self.spec.get("titulo"))
 
     def _marca(self, c, t):
-        a = 0.45 * (1 - rampa(t, self.T_FIN, 0.4))
-        f = fuente("HelveticaNowDisplay-Bold", 26)
-        escribe(c, marca.NOMBRE, self.W - 72 - mide(f, marca.NOMBRE, 6), 150, f, BLANCO, alfa=a, espacio=6, centro=False, sombra=0.6)
+        from . import identidad
+        identidad.barras(c, self.W, self.H, 1.0)
+        identidad.marca_de_agua(c, self.W, self.H, 0.8 * (1 - rampa(t, self.T_FIN, 0.4)))
 
     def eventos(self):
         ev = []

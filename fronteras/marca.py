@@ -1,5 +1,8 @@
-"""Nombre y lema del canal en un solo lugar. Se cambian con las variables FRONTERAS_MARCA y FRONTERAS_LEMA."""
+"""Nombre y lema del canal en un solo lugar. Se pueden cambiar con FRONTERAS_MARCA y FRONTERAS_LEMA."""
 import os
 
-NOMBRE = os.environ.get("FRONTERAS_MARCA", "EL PORQUÉ")
-LEMA = os.environ.get("FRONTERAS_LEMA", "Todo tiene una razón")
+_viejos = {"", "EL PORQUÉ", "EL PORQUE", "FRONTERAS"}
+NOMBRE = os.environ.get("FRONTERAS_MARCA", "STORY")
+NOMBRE = "STORY" if NOMBRE.strip().upper() in _viejos else NOMBRE
+LEMA = os.environ.get("FRONTERAS_LEMA", "Detrás de todo hay una historia")
+LEMA = "Detrás de todo hay una historia" if LEMA.strip() in ("", "Todo tiene una razón") else LEMA

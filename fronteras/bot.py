@@ -470,6 +470,38 @@ def pedido_ideas(extra=""):
             "Prohibido repetir o parafrasear cualquiera de estas, ya se usaron: " + "; ".join(vistas))
 
 
+async def dar_ideas(update: Update, ctx: ContextTypes.DEFAULT_TYPE, extra=""):
+    """Ideas siempre: la IA sin el historial de la plática (más barato y no se confunde), un reintento,
+    y si aun así no llegan, las del banco curado. Nunca contesta "no te entendí"."""
+    chat = update.effective_chat.id
+    await ctx.bot.send_chat_action(chat, ChatAction.TYPING)
+    usados = set(ajustes.ideas_dadas()) | set(ajustes.temas_hechos())
+    ideas = []
+    for _ in range(2):
+        clave = f"ideas-{time.time()}"
+        try:
+            _, _, ideas = await asyncio.to_thread(charla.responder, clave, pedido_ideas(extra))
+        except Exception:
+            logging.exception("ideas")
+            ideas = []
+        finally:
+            charla.historial.pop(clave, None)
+        ideas = [i for i in ideas if i not in usados]
+        if len(ideas) >= 3:
+            break
+    if len(ideas) < 3:
+        import random
+        from . import banco_temas
+        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS if t not in usados and t not in ideas]
+        ideas += random.sample(libres, min(8 - len(ideas), len(libres)))
+    if not ideas:
+        await update.effective_message.reply_text("Ya usé todas las ideas que tenía. Escríbeme un tema y lo hago.")
+        return
+    ajustes.anotar_ideas(ideas)
+    await update.effective_message.reply_text("💡 <b>Aquí van unas que funcionan muy bien</b>\n<i>Toca una para producirla</i>",
+                                              parse_mode=ParseMode.HTML, reply_markup=botones_ideas(ideas))
+
+
 # ---------------- plática ----------------
 async def platicar(update: Update, ctx: ContextTypes.DEFAULT_TYPE, texto: str):
     if not autorizado(update):
@@ -499,7 +531,7 @@ async def texto_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     t = update.message.text.strip()
     if t == B_IDEAS:
-        await platicar(update, ctx, pedido_ideas())
+        await dar_ideas(update, ctx)
     elif t == B_NUEVO:
         await pedir_tema(update)
     elif t == B_FORMATO:
@@ -639,7 +671,7 @@ async def cmd_horizontal(update, ctx):
 
 
 async def cmd_ideas(update, ctx):
-    await platicar(update, ctx, pedido_ideas())
+    await dar_ideas(update, ctx)
 
 
 async def cmd_formato(update, ctx):
@@ -670,7 +702,7 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             asyncio.create_task(producir(update, ctx, tema, es_horizontal(chat)))
     elif accion == "mas":
         await q.answer("💡 Buscando…")
-        await platicar(update, ctx, pedido_ideas("distintas a las anteriores"))
+        await dar_ideas(update, ctx, "distintas a las anteriores")
     elif accion == "propio":
         await q.answer()
         await pedir_tema(update)

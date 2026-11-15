@@ -40,7 +40,7 @@ PALABRAS_MAPA = ("país", "pais", "frontera", "mapa", "imperio", "territorio", "
 
 def modo_de(tema):
     """Curiosidades o mapas. Si el tema nombra un país o habla de fronteras e historia, va con mapas."""
-    t = " " + tema.lower() + " "
+    t = " " + re.sub(r"[¿?¡!.,;:]", " ", tema.lower()) + " "
     if any(p in t for p in PALABRAS_MAPA):
         return "mapas"
     try:
@@ -52,7 +52,9 @@ def modo_de(tema):
         import re as _re
         palabras = [_n(w) for w in _re.findall(r"\w+", t)]
         juntas = set(palabras) | {a + b for a, b in zip(palabras, palabras[1:])} | {a + b + c for a, b, c in zip(palabras, palabras[1:], palabras[2:])}
-        if juntas & modo_de._nombres:
+        # un país solo no basta (los billetes de Canadá son una curiosidad): hace falta que el tema sea de geografía o historia
+        if juntas & modo_de._nombres and any(p in t for p in ("por qué ", "porque ", "cómo se ", "como se ", "dónde ", "donde ")) \
+                and any(p in t for p in (" mapa", " tierra", " forma", " tamaño", " límite", " limite", " separ", " divid", " dueño", " pertenece", " es de ", " no tiene ", " tiene tantos ", " habla")):
             return "mapas"
     except Exception:
         pass
@@ -81,7 +83,12 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
         if modo == "curiosidades":
             spec = guionista.escribir_curiosidad(tema, estilo_texto=estilos.instrucciones_guion(est), aviso=lambda m: aviso(1, m))
         else:
-            spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est), modo=modo)
+            try:
+                spec = guionista.escribir(tema, estilo_texto=estilos.instrucciones_guion(est), modo=modo)
+            except Exception as err:  # si el guion de mapas no sale, se hace como curiosidad en 3D: nunca se queda sin video
+                print("Guion de mapas falló, paso a curiosidad 3D:", err)
+                aviso(1, "Reescribiendo como curiosidad en 3D")
+                spec = guionista.escribir_curiosidad(tema, estilo_texto=estilos.instrucciones_guion(est), aviso=lambda m: aviso(1, m))
     spec["estilo"] = est
     spec["formato"] = "horizontal" if horizontal else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)

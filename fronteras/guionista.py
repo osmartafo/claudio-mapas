@@ -175,6 +175,16 @@ REGLAS GENERALES
 
 
 def escribir(tema, api_key=None, estilo_texto="", modo="mapas"):
+    """Un intento más si el primero se corta (a veces la IA se alarga de más): el segundo pide ir al grano."""
+    try:
+        return _escribir(tema, api_key, estilo_texto, modo)
+    except ValueError as err:
+        print("Guion cortado, reintento compacto:", err)
+        extra = "IMPORTANTE: sé compacto. Máximo 14 escenas, máximo 3 zonas por escena, sin repetir datos."
+        return _escribir(tema, api_key, (estilo_texto + "\n\n" + extra).strip(), modo, busquedas=1)
+
+
+def _escribir(tema, api_key=None, estilo_texto="", modo="mapas", busquedas=None):
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
     # el estilo va en el mensaje y no en el sistema, así el sistema se queda en caché y sale más barato
     mensajes = [{"role": "user", "content": f"Tema del video: {tema}\n\n{estilo_texto}".strip()}]
@@ -184,7 +194,7 @@ def escribir(tema, api_key=None, estilo_texto="", modo="mapas"):
         max_tokens=int(os.environ.get("FRONTERAS_TOKENS", "32000")),
         system=[{"type": "text", "text": SISTEMA_CURIOSIDADES if modo == "curiosidades" else SISTEMA, "cache_control": {"type": "ephemeral"}}],
         messages=mensajes,
-        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}],
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": busquedas or int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}],
     ) as flujo:
         r = flujo.get_final_message()
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")

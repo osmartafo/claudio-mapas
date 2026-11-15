@@ -123,3 +123,23 @@ def anotar_ideas(ideas):
         lista += [i for i in ideas if i not in lista]
         d["ideas_dadas"] = lista[-200:]
         _escribir(d)
+
+
+def guardar_ideas_piloto(ideas):
+    """Ideas que la IA propuso de más: el piloto las usa los siguientes días sin volver a pagar."""
+    with _candado:
+        d = _leer()
+        cola = d.get("cola_piloto", [])
+        cola += [i for i in ideas if i not in cola]
+        d["cola_piloto"] = cola[-40:]
+        _escribir(d)
+
+
+def sacar_idea_piloto(usados):
+    with _candado:
+        d = _leer()
+        cola = [i for i in d.get("cola_piloto", []) if i not in usados]
+        tema = cola.pop(0) if cola else None
+        d["cola_piloto"] = cola
+        _escribir(d)
+        return tema

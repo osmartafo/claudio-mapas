@@ -101,10 +101,48 @@ def categorias():
     return sorted(indice() or {})
 
 
+def precargar(spec):
+    """Baja los modelos que pide el guion mientras se graba la voz, para no esperar después."""
+    cats = {o.get("catalogo") for e in spec.get("escenas", []) if e.get("tipo") == "3d"
+            for o in ((e.get("modelo") or {}).get("objetos") or []) if o.get("catalogo")}
+    for c in cats:
+        try:
+            obtener(c)
+        except Exception as err:
+            print("precarga", c, err)
+
+
+# categorías que sirven para casi cualquier historia (escenario, utilería): siempre van en la lista
+BASICAS = ("table", "chair", "book", "bottle", "cup", "bowl", "plate", "lamp", "box", "bucket", "clock", "globe", "pencil",
+           "notebook", "ladder", "shelf", "bed", "sofa", "television_set", "computer_keyboard", "laptop_computer", "cellular_telephone",
+           "car_(automobile)", "bicycle", "airplane", "boat", "train_(railroad_vehicle)", "house", "tree", "flower_arrangement",
+           "dog", "cat", "bird", "fish", "apple", "banana", "bread", "coin", "money", "magnifying_glass", "microscope",
+           "telescope", "guitar", "piano", "ball", "trophy_cup", "crown", "sword", "flag", "map", "key", "lock", "toolbox",
+           "hammer", "screwdriver", "bathtub", "faucet", "towel", "sponge", "sink", "toothbrush", "soap", "mirror", "shoe", "hat")
+
+
+def categorias_para(objetos, guion=""):
+    """Solo las categorías que tienen que ver con la historia (más un set básico), en vez de las 1,156.
+    Ahorra tokens en cada video y el director elige mejor."""
+    todas = categorias()
+    if not todas:
+        return []
+    import re
+    palabras = {w for o in objetos for w in re.findall(r"[a-z]+", str(o).lower()) if len(w) > 2}
+    palabras |= {w[:-1] for w in palabras if w.endswith("s")}
+    elegidas = [c for c in todas if c in BASICAS or palabras & set(re.findall(r"[a-z]+", c))]
+    return elegidas if len(elegidas) >= 25 else todas
+
+
+MAX_BYTES_RAPIDO = int(os.environ.get("FRONTERAS_MODELO_MAX_MB", "15")) * 1_000_000
+
+
 def obtener(categoria, evitar=()):
     """Devuelve (ruta_local_glb, credito) del mejor modelo de la categoría, o None."""
     ind = indice() or {}
     opciones = ind.get(categoria) or ind.get(categoria.lower().replace(" ", "_")) or []
+    # primero los modelos ligeros (cargan y se dibujan más rápido); los pesados solo si no hay otro
+    opciones = sorted(opciones, key=lambda m: m.get("tam", 0) > MAX_BYTES_RAPIDO)
     for m in opciones:
         if m["uid"] in evitar:
             continue

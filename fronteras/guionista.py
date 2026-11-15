@@ -232,7 +232,8 @@ GUION
 Responde SOLO con JSON
 {"titulo": "máx 70 caracteres, puede llevar un emoji", "descripcion": "2 a 4 frases y 3 hashtags",
  "fuentes": ["url"], "esqueleto": {"premisa": "", "gancho": "", "promesa": "", "pasos": ["", "", ""], "giro": "", "remate": "", "siembra": "", "cierre": ""},
- "guion": "texto completo que leerá la voz"}
+ "guion": "texto completo que leerá la voz",
+ "objetos": ["8 a 15 objetos físicos que se pueden mostrar en 3D para contar esta historia, en inglés y en singular (bathtub, sponge, faucet)"]}
 """
 
 PASO_AUDITORIA = """Eres script doctor con el método de Zepfilms. Recibes el esqueleto y el guion de un short de 50 segundos.
@@ -302,11 +303,11 @@ Responde SOLO con JSON {"escenas": [ ... ]}
 """
 
 
-def _llamar(cliente, sistema, contenido, max_tokens, buscar=False):
+def _llamar(cliente, sistema, contenido, max_tokens, buscar=False, busquedas=None):
     params = dict(model=MODELO, max_tokens=max_tokens, messages=[{"role": "user", "content": contenido}],
                   system=[{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}])
     if buscar:
-        params["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}]
+        params["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": busquedas or int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}]
     with cliente.messages.stream(**params) as flujo:
         r = flujo.get_final_message()
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
@@ -322,7 +323,8 @@ def _llamar(cliente, sistema, contenido, max_tokens, buscar=False):
 def escribir_curiosidad(tema, api_key=None, estilo_texto="", aviso=lambda *a: None):
     """Tres pasos: esqueleto y guion (con búsqueda), auditoría Zepfilms que reescribe, y dirección 3D con modelos reales."""
     cliente = anthropic.Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-    base = _llamar(cliente, PASO_GUION, f"Tema del video: {tema}\n\n{estilo_texto}".strip(), 6000, buscar=True)
+    base = _llamar(cliente, PASO_GUION, f"Tema del video: {tema}\n\n{estilo_texto}".strip(), 6000, buscar=True,
+                   busquedas=int(os.environ.get("FRONTERAS_BUSQUEDAS_CURIOSIDAD", "2")))
     if not base.get("guion"):
         raise ValueError("El guionista no devolvió el guion. Intenta de nuevo.")
     aviso("Auditando el guion")
@@ -337,7 +339,7 @@ def escribir_curiosidad(tema, api_key=None, estilo_texto="", aviso=lambda *a: No
     aviso("Dirigiendo las escenas 3D")
     try:
         from . import catalogo
-        cats = catalogo.categorias()
+        cats = catalogo.categorias_para(base.get("objetos") or [], base.get("guion", ""))
     except Exception:
         cats = []
     lista = ("CATEGORÍAS DISPONIBLES PARA \"catalogo\": " + ", ".join(cats)) if cats else \

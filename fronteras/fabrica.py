@@ -86,6 +86,13 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     spec["formato"] = "horizontal" if horizontal else "vertical"
     json.dump(spec, open(f"{carpeta}/spec.json", "w"), ensure_ascii=False, indent=1)
 
+    precarga = None
+    if spec.get("modo") == "curiosidades":  # los modelos 3D se bajan en paralelo mientras se graba la voz
+        import threading
+        from . import catalogo
+        precarga = threading.Thread(target=catalogo.precargar, args=(spec,), daemon=True)
+        precarga.start()
+
     aviso(2, "Grabando la voz")
     if not (os.path.exists(f"{carpeta}/voz.mp3") and os.path.exists(f"{carpeta}/palabras.json")):
         voz.generar(spec["guion"], f"{carpeta}/voz.mp3", f"{carpeta}/palabras.json", voz_id=est.get("voz"))
@@ -101,6 +108,8 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
         aviso(4, "Animando los mapas (ajusté una escena)")
         spec["escenas"] = _limpia(spec, v)
         short = Short(spec, v)
+    if precarga:
+        precarga.join(timeout=300)
     if any(e.get("tipo") == "3d" for e in short.escenas):
         aviso(4, "Animando en 3D", 0.0)
         short.preparar_3d(carpeta, aviso=lambda f: aviso(4, "Animando en 3D", 0.5 * f))

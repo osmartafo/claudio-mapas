@@ -314,15 +314,20 @@ async def piloto_uno(app: Application, chat):
     p = ajustes.piloto()
     hechos_antes = ajustes.temas_hechos()
     usados = set(hechos_antes) | set(ajustes.ideas_dadas())
-    tema = None
-    for _ in range(2):  # la IA propone; si falla o repite, se intenta otra vez
+    # primero la reserva de ideas que ya se pagaron; solo si se acabó se le piden más a la IA (una llamada rinde varios días)
+    tema = ajustes.sacar_idea_piloto(usados)
+    for _ in range(0 if tema else 2):
         try:
-            _, _, ideas = await asyncio.to_thread(charla.responder, f"piloto-{time.time()}", pedido_ideas())
+            clave = f"piloto-{time.time()}"
+            _, _, ideas = await asyncio.to_thread(charla.responder, clave, pedido_ideas())
+            charla.historial.pop(clave, None)
         except Exception:
             logging.exception("piloto ideas")
             ideas = []
-        tema = next((i for i in ideas if i not in hechos_antes), None)
-        if tema:
+        nuevas = [i for i in ideas if i not in usados]
+        if nuevas:
+            tema = nuevas[0]
+            ajustes.guardar_ideas_piloto(nuevas[1:])
             break
     if not tema:  # reserva: nunca se queda sin video
         import random
@@ -340,14 +345,18 @@ async def piloto_uno(app: Application, chat):
         estado["ahora"], estado["inicio"] = tema, time.time()
         monitor.estado_bot["ahora"] = tema
         try:
-            video, texto = await asyncio.to_thread(hacer_video, tema, False, lambda *a: None, True, ajustes.estilo(chat))
+            try:
+                video, texto = await asyncio.to_thread(hacer_video, tema, False, lambda *a: None, True, ajustes.estilo(chat))
+            except Exception:
+                # un segundo intento reusa el guion y la voz ya pagados (nuevo=False), así una falla no se cobra doble
+                logging.exception("piloto video, reintento")
+                video, texto = await asyncio.to_thread(hacer_video, tema, False, lambda *a: None, False, ajustes.estilo(chat))
         except Exception as err:
             logging.exception("piloto video")
             await aviso.edit_text(f"🤖 <b>{e(tema)}</b>\n\n{explica(err)}", parse_mode=ParseMode.HTML)
             return
         finally:
             estado["ahora"] = None
-            monitor.estado_bot["ahora"] = None
             monitor.estado_bot["ahora"] = None
     contador["video"] += 1
     n = contador["video"]

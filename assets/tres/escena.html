@@ -149,7 +149,7 @@ window.preparar = async (d, ancho, alto) => {
   }
   const sol = new THREE.DirectionalLight(cine ? 0xFFC48A : 0xffffff, cine ? 2.4 : 2.2);
   sol.position.set(6, 12, 8); sol.castShadow = true;
-  sol.shadow.mapSize.set(2048, 2048);
+  sol.shadow.mapSize.set(d.sombra_res || 2048, d.sombra_res || 2048);
   sol.shadow.bias = -0.0015; sol.shadow.normalBias = 0.03;
   escena.add(sol); escena.add(sol.target);
   if (d.suelo !== null && d.suelo !== false) {

@@ -181,7 +181,7 @@ function personaje(o) {
   }
   // brazos: hombro y codo
   const brazo = (lado, i) => {
-    const h = articulacion(torso, lado * 0.23, 0.56, 0); h.rotation.x = R(p.hombro[i]); h.rotation.z = R(lado * 6);
+    const h = articulacion(torso, lado * 0.25, 0.56, 0); h.rotation.x = R(p.hombro[i]); h.rotation.z = R(lado * 9);
     if (raiz.userData.partes) raiz.userData.partes.hombros.push(h);
     h.add(pieza(new THREE.CylinderGeometry(0.055, 0.048, 0.3, 5), mat, 0, -0.15, 0));
     const c = articulacion(h, 0, -0.3, 0); c.rotation.x = R(p.codo[i]);
@@ -351,7 +351,11 @@ window.preparar = async (d, ancho, alto) => {
       try {
         const gltf = await cargador.loadAsync(o.archivo);
         const mod = gltf.scene;
-        mod.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; if (n.material) n.material.side = THREE.DoubleSide; } });
+        mod.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true;
+          for (const mt of [].concat(n.material || [])) {  // faros y pantallas de los modelos no deben quemar la toma
+            mt.side = THREE.DoubleSide;
+            if (mt.emissive && (mt.emissiveIntensity ?? 1) > 0) mt.emissiveIntensity = Math.min(mt.emissiveIntensity ?? 1, AMBIENTES[d.ambiente] ? 0.35 : 0.6);
+          } } });
         const caja0 = new THREE.Box3().setFromObject(mod), tam0 = caja0.getSize(new THREE.Vector3());
         const k = (o.tamano || 1) / Math.max(tam0.x, tam0.y, tam0.z, 1e-6);
         mod.scale.setScalar(k);
@@ -397,6 +401,7 @@ window.preparar = async (d, ancho, alto) => {
     const cs = sol.shadow.camera; cs.left = cs.bottom = -radio; cs.right = cs.top = radio; cs.near = 0.1; cs.far = radio * 6;
     cs.updateProjectionMatrix();
   }
+  if (d.plano) def.camara = tomaAuto(d.plano, d);
   if (cine) {
     // sol bajo y cálido entrando por una persiana, más la luz principal suave
     sol.shadow.radius = 6; sol.shadow.blurSamples = 12;
@@ -408,7 +413,7 @@ window.preparar = async (d, ancho, alto) => {
     compositor = new EffectComposer(renderer);
     compositor.addPass(new RenderPass(escena, camara));
     if (d.desenfoque) { bokeh = new BokehPass(escena, camara, { focus: 5, aperture: d.desenfoque, maxblur: 0.006 }); compositor.addPass(bokeh); }
-    compositor.addPass(new UnrealBloomPass(new THREE.Vector2(ancho / 4, alto / 4), amb ? amb.bloom : 0.3, 0.5, amb ? 0.75 : 0.9));
+    compositor.addPass(new UnrealBloomPass(new THREE.Vector2(ancho / 4, alto / 4), amb ? amb.bloom * 0.8 : 0.3, 0.5, amb ? 0.86 : 0.9));
     grano = new ShaderPass(GradoCine); compositor.addPass(grano);
     if (amb) { grano.uniforms.grano.value = amb.grano; grano.uniforms.vineta.value = amb.vineta; grano.uniforms.tinte.value.set(...amb.tinte); }
     compositor.addPass(new OutputPass());
@@ -424,6 +429,94 @@ window.preparar = async (d, ancho, alto) => {
     fl.line.material.linewidth = 4; escena.add(fl); flechas.push({ fl, f, largo });
   }
 };
+
+// ---------------- cámara automática: la IA dice qué toma quiere y aquí se calcula dónde va la cámara ----------------
+// planos: "general", "dos", "medio:id", "primer:id", "detalle:id", "pov:id[:id_mira]", "hombro:id_espaldas:id_frente",
+//         "nuca:id" (detrás de alguien), "cenital". Siempre deja la cabeza completa y se mueve un poco.
+function infoPersonaje(id) {
+  const g = objetos[id]; if (!g) return null;
+  g.updateMatrixWorld(true);
+  const cab = g.userData.cabeza ? g.userData.cabeza.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.13, 0)) :
+    new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()).setY(1.6);
+  const frente = new THREE.Vector3(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion())).setY(0).normalize();
+  const pecho = cab.clone().add(new THREE.Vector3(0, -0.38, 0));
+  return { g, cab, pecho, frente, pos: g.getWorldPosition(new THREE.Vector3()) };
+}
+function cajaDe(id) { const g = objetos[id]; return g ? new THREE.Box3().setFromObject(g) : null; }
+function tomaAuto(plano, d) {
+  const partes = String(plano).split(':');
+  const tipo = partes[0], id = partes[1], id2 = partes[2];
+  const personajes = (d.objetos || []).filter(o => o.forma === 'personaje' && objetos[o.id]).map(o => infoPersonaje(o.id));
+  const fovV = THREE.MathUtils.degToRad(camara.fov), aspecto = camara.aspect;
+  const fovH = 2 * Math.atan(Math.tan(fovV / 2) * aspecto);
+  const distPara = (alto, ancho) => Math.max(alto / (2 * Math.tan(fovV / 2)), ancho / (2 * Math.tan(fovH / 2)));
+  let pos, mira;
+  const lado = (v) => new THREE.Vector3(v.z, 0, -v.x);
+  const P = id ? infoPersonaje(id) : null;
+  if ((tipo === 'primer' || tipo === 'medio') && P) {
+    const alto = tipo === 'primer' ? 0.95 : 1.5;
+    const d0 = distPara(alto, alto * 0.62) + 0.15;
+    mira = tipo === 'primer' ? P.cab.clone().add(new THREE.Vector3(0, -0.2, 0)) : P.pecho.clone().add(new THREE.Vector3(0, -0.05, 0));
+    pos = mira.clone().add(P.frente.clone().multiplyScalar(d0)).add(lado(P.frente).multiplyScalar(d0 * 0.28));
+    pos.y = mira.y + 0.05;
+  } else if (tipo === 'hombro' && P && id2 && infoPersonaje(id2)) {
+    const B = infoPersonaje(id2);
+    const hacia = B.cab.clone().sub(P.cab).setY(0).normalize();
+    pos = P.cab.clone().sub(hacia.clone().multiplyScalar(0.55)).add(lado(hacia).multiplyScalar(0.32)); pos.y = P.cab.y + 0.05;
+    mira = B.cab.clone().add(new THREE.Vector3(0, -0.15, 0));
+  } else if (tipo === 'pov' && P) {
+    pos = P.cab.clone().add(P.frente.clone().multiplyScalar(0.18)); pos.y -= 0.08;
+    const otro = id2 && infoPersonaje(id2);
+    mira = otro ? otro.cab.clone().add(new THREE.Vector3(0, -0.2, 0)) : pos.clone().add(P.frente.clone().multiplyScalar(3)).add(new THREE.Vector3(0, -0.25, 0));
+  } else if (tipo === 'nuca' && P) {
+    pos = P.cab.clone().sub(P.frente.clone().multiplyScalar(1.1)); pos.y = P.cab.y + 0.15;
+    mira = P.cab.clone().add(P.frente.clone().multiplyScalar(2.5)); mira.y = P.pecho.y;
+  } else if (tipo === 'detalle' && id && cajaDe(id)) {
+    const c = cajaDe(id), centro = c.getCenter(new THREE.Vector3()), t = c.getSize(new THREE.Vector3());
+    const d0 = distPara(Math.max(t.y, 0.15) * 1.8, Math.max(t.x, t.z, 0.15) * 1.6) + Math.max(t.x, t.z) * 0.5;
+    mira = centro; pos = centro.clone().add(new THREE.Vector3(0.35, 0.45, 1).normalize().multiplyScalar(d0));
+  } else {
+    // general / dos / cenital: encuadra a todos los personajes (o todo lo que hay) desde el frente
+    const c = new THREE.Box3();
+    const grupo = tipo === 'dos' || personajes.length ? personajes : [];
+    if (grupo.length) for (const q of grupo) c.expandByObject(q.g);
+    else for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma)) c.expandByObject(objetos[o.id]);
+    if (c.isEmpty()) c.setFromCenterAndSize(new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 2, 2));
+    const centro = c.getCenter(new THREE.Vector3()), t = c.getSize(new THREE.Vector3());
+    let frente = new THREE.Vector3(0, 0, 1);
+    if (grupo.length) { frente = grupo.reduce((a, q) => a.add(q.frente), new THREE.Vector3()); if (frente.length() < 0.3) frente = new THREE.Vector3(0, 0, 1); frente.normalize(); }
+    let ancho = Math.max(t.x, t.z);
+    if (grupo.length >= 2) {
+      // en vertical, a dos personajes se les ve en diagonal (uno un poco detrás del otro), así caben grandes en el cuadro
+      const linea = grupo[grupo.length - 1].pos.clone().sub(grupo[0].pos).setY(0);
+      const sep = linea.length(); linea.normalize();
+      const perp = lado(linea); if (perp.dot(frente) < 0) perp.negate();
+      frente = perp.multiplyScalar(0.62).add(linea.multiplyScalar(0.78 * (partes[1] === 'b' ? -1 : 1))).normalize();
+      ancho = sep * 0.62 + 0.7;
+    }
+    const holgura = tipo === 'general' ? 1.45 : 1.12;
+    const d0 = distPara(t.y * holgura, ancho * holgura) + 0.3;
+    mira = centro.clone(); mira.y = Math.max(0.6, centro.y + (tipo === 'general' ? -0.1 : 0.1));
+    pos = centro.clone().add(frente.multiplyScalar(d0));
+    pos.y = tipo === 'cenital' ? mira.y + d0 * 0.9 : mira.y + 0.35 + (tipo === 'general' ? 0.4 : 0);
+  }
+  // dentro del cuarto si hay uno, y nunca dentro de un personaje
+  const cuarto = (d.objetos || []).find(o => o.forma === 'cuarto' && objetos[o.id]);
+  if (cuarto) {
+    const [w, h, fondo] = cuarto.tam || [4, 2.6, 4]; const c0 = new THREE.Vector3(...(cuarto.pos || [0, 0, 0]));
+    pos.x = THREE.MathUtils.clamp(pos.x, c0.x - w / 2 + 0.3, c0.x + w / 2 - 0.3);
+    pos.z = THREE.MathUtils.clamp(pos.z, c0.z - fondo / 2 + 0.3, c0.z + fondo / 2 + 2.5);
+    pos.y = THREE.MathUtils.clamp(pos.y, 0.3, h - 0.15);
+  }
+  if (tipo !== 'pov') for (const q of personajes) {
+    const caja = new THREE.Box3().setFromObject(q.g).expandByScalar(0.25);
+    if (caja.containsPoint(pos)) pos.add(pos.clone().sub(mira).setY(0).normalize().multiplyScalar(0.6));
+  }
+  // movimiento: acercamiento suave y un leve desplazamiento lateral
+  const dir = mira.clone().sub(pos); const lat = lado(dir.clone().setY(0).normalize()).multiplyScalar(0.12);
+  const fin = pos.clone().add(dir.multiplyScalar(tipo === 'pov' ? 0.06 : 0.1)).add(lat);
+  return [{ t: 0, pos: pos.toArray(), mira: mira.toArray() }, { t: 1, pos: fin.toArray(), mira: mira.toArray() }];
+}
 
 function camaraEn(u) {
   const ks = def.camara && def.camara.length ? def.camara : [{ t: 0, pos: [6, 4, 7], mira: [0, 0.5, 0] }];

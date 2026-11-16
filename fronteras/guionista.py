@@ -17,7 +17,18 @@ DOPAMINA = """ESTRUCTURA DOPAMÍNICA (retención segundo a segundo, la regla que
 - Concreto y sensorial: cifras exactas, objetos, nombres, lugares. Lo vago no da dopamina.
 - Últimos 5 segundos: el pago que cierra el bucle del gancho, y la última frase conecta con la primera para que el
   video se repita en bucle o deja una pregunta que invita a comentar.
-- Prohibido: "en este video", "hoy te voy a contar", "sabías que" genérico, despedidas, pedir like o suscripción."""
+- Prohibido: "en este video", "hoy te voy a contar", "sabías que" genérico, despedidas, pedir like o suscripción.
+
+LECCIONES DE REELS (escalera de dopamina)
+- Pregunta → anticipación → respuesta NO obvia → nueva pregunta. No contestes demasiado rápido: deja pistas, una falsa
+  pista o un "casi" antes de la respuesta, pero siempre págala (nunca dejes un bucle grande abierto).
+- Expectativa contra realidad: si la siguiente frase es lo que el espectador ya adivinaba, reescríbela con un mecanismo,
+  una cifra, un ejemplo o una contradicción que no esperaba.
+- El gancho encaja con el tipo de video: curiosidad + promesa de aprender (dato), emoción y algo en juego (historia),
+  tensión (mito que se derrumba).
+- Piensa en por qué alguien lo compartiría ("se lo tengo que mandar a…") y deja una frase que provoque comentar
+  (una pregunta con dos opciones, una postura defendible, "¿tú lo sabías?").
+- Marca en "revelacion" las 2 o 3 palabras EXACTAS donde cae la respuesta más fuerte: ahí entra un sonido que sube."""
 
 
 SISTEMA = """Eres el guionista y director de FRONTERAS, un canal de YouTube de documentales cortos de historia y geografía.
@@ -53,6 +64,7 @@ Responde SOLO con un objeto JSON válido, sin texto antes ni después, con esta 
   "descripcion": "descripción para YouTube de 2 a 4 frases, con 3 hashtags al final",
   "fuentes": ["url1", "url2"],
   "guion": "texto completo que leerá la voz",
+  "revelacion": "2 o 3 palabras exactas del guion donde cae la respuesta más fuerte",
   "latitud_media": 30,
   "territorios": {"nombre_corto": [[lon, lat], [lon, lat], ...]},
   "escenas": [
@@ -135,6 +147,7 @@ Responde SOLO con un objeto JSON válido, sin texto antes ni después
   "descripcion": "2 a 4 frases con 3 hashtags al final",
   "fuentes": ["url1", "url2"],
   "guion": "texto completo que leerá la voz",
+  "revelacion": "2 o 3 palabras exactas del guion donde cae la respuesta más fuerte",
   "latitud_media": 30,
   "escenas": [ ... ]
 }
@@ -254,6 +267,7 @@ Responde SOLO con JSON
 {"titulo": "máx 70 caracteres, puede llevar un emoji", "descripcion": "2 a 4 frases y 3 hashtags",
  "fuentes": ["url"], "esqueleto": {"premisa": "", "gancho": "", "promesa": "", "pasos": ["", "", ""], "giro": "", "remate": "", "siembra": "", "cierre": ""},
  "guion": "texto completo que leerá la voz",
+ "revelacion": "2 o 3 palabras exactas del guion donde cae la respuesta más fuerte",
  "objetos": ["8 a 15 objetos físicos que se pueden mostrar en 3D para contar esta historia, en inglés y en singular (bathtub, sponge, faucet)"]}
 """
 
@@ -385,6 +399,8 @@ def escribir_curiosidad(tema, api_key=None, estilo_texto="", aviso=lambda *a: No
         if aud.get("guion") and 80 <= len(aud["guion"].split()) <= 190:
             base["guion_original"] = base["guion"]
             base["guion"] = aud["guion"]
+            if aud.get("revelacion"):
+                base["revelacion"] = aud["revelacion"]
         base["auditoria"] = {k: aud.get(k) for k in ("calificacion", "problemas", "funciona")}
     except Exception as err:
         base["auditoria"] = {"error": str(err)[:200]}

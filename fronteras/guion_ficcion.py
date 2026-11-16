@@ -35,22 +35,35 @@ ESTRUCTURA_TERROR = """ESTRUCTURA DE TERROR (cortos de referencia de 80 a 110 se
 - Narrador en primera persona, pasado simple, frases de 2 a 7 palabras, ritmo de respiración contenida.
 - Opcional al final una pregunta al público con dos opciones (¿Tú qué harías? Abrir la puerta / Dejarla cerrada)."""
 
-ESTRUCTURA_AMOR = """ESTRUCTURA DE AMOR (corto de referencia de 70 a 90 segundos, sin narrador, solo diálogo)
-- PAREJAS DIVERSAS: el corto puede ser de una pareja de hombre y mujer, de dos hombres (gay), de dos mujeres (sáfica)
-  o de amistad. Si la idea no lo dice, alterna entre ellas. Escríbelas igual que cualquier historia de amor, con ternura,
-  humor y verdad, sin estereotipos ni drama por ser quienes son: el conflicto es el del amor, no el de su orientación.
-- Dos personajes de noche en un lugar tranquilo (una fiesta a lo lejos, una alberca, una azotea, un coche estacionado,
-  la banca de un parque). Uno está apagado por algo que no dice (una ruptura, una distancia, una pérdida) y el otro
-  lo conoce de años y lo acompaña con humor.
-- Abre con una observación concreta ("Oye, llevas un rato viendo la alberca sin decir nada.") y una evasiva.
-- El conflicto se dice de lado, con subtexto, nunca con frases de autoayuda.
-- Un RECUERDO ESPECÍFICO y físico que funciona como objeto (una playlist con nombre, una sudadera, una canción,
-  un plan cancelado). Se planta en la mitad y se cosecha en el giro.
-- Giro emocional: lo que extraña no es a la otra persona sino quién era él o ella cuando se emocionaba por todo.
-  "Y eso sigue ahí."
-- Cierre con una invitación de vuelta a la vida, ligera y concreta ("Nos falta uno en el beer pong." / "Vamos, pues.").
-- Español de México natural, coloquial, alguna grosería suave si el personaje la diría. Líneas de 3 a 14 palabras.
-- Al final una reflexión escrita para la pantalla, de dos a tres frases, que diga la idea sin repetir el diálogo.
+ESTRUCTURA_AMOR = """ESTRUCTURA DE AMOR QUE DUELE (cortos de referencia de 60 a 80 segundos)
+Esto tiene que DOLER, como las reflexiones de parejas que ya terminaron. El dolor no sale de palabras bonitas,
+sale de detalles chiquitos y de lo que nadie se atreve a decir.
+
+FORMA DE ESCRIBIR (la más importante)
+- Frases simples, chiquitas y fáciles de entender. De 2 a 9 palabras. Una idea por frase.
+- Palabras de todos los días, como habla la gente en México. Nada de poesía: prohibido "alma", "corazón roto",
+  "infinito", "destino", "eternidad", "mariposas", "te amaré por siempre".
+- Detalles concretos y cotidianos que duelen: su lado de la cama, el cepillo de dientes que sigue ahí, la sudadera que
+  todavía huele, el "¿ya llegaste?" que ya nadie manda, el contacto que no borras, la canción que ya no puedes oír,
+  cómo tomaba el café, la foto que no te atreves a archivar.
+- Antes y ahora en dos frases: "Antes me esperabas despierta." / "Ahora ni me lees."
+- Nadie dice "te extraño" ni "me duele": se nota en lo que hacen y en lo que no dicen.
+- Silencios: una línea de una o dos palabras ("Ajá." "Ya." "Bueno.") pesa más que un discurso.
+- No uses letras de canciones ni frases famosas: todo es original.
+
+ESTRUCTURAS (elige la que mejor sirva a la idea)
+a) Dos ex se encuentran otra vez (una boda, el súper, la fiesta de un amigo) y platican como si nada, pero todo duele.
+b) Un amigo o amiga acompaña a quien terminó; uno está apagado y el otro lo hace hablar.
+c) La última noche antes de que uno se vaya: hablan de cosas chiquitas para no hablar de lo grande.
+d) Una voz en off (narradora o narrador) le habla a quien ya no está, con recuerdos muy concretos, y al final el otro
+   personaje dice una sola línea.
+- PAREJAS DIVERSAS: hombre y mujer, dos hombres, dos mujeres o amistad. Si la idea no lo dice, alterna. El conflicto es
+  el del amor, nunca el de su orientación; sin estereotipos.
+- Un objeto o recuerdo concreto se planta al inicio y se cosecha en el golpe final.
+- Golpe final: una frase corta que rompe ("Sí la guardé. La playlist." / "Todavía pongo dos tazas.").
+- Español de México natural. Líneas de 2 a 12 palabras. 110 a 170 palabras en total.
+- Cierre SIEMPRE con una reflexión escrita para la pantalla: 2 o 3 frases cortitas y simples que duelan y se puedan
+  mandar a alguien ("Hay gente que no se va de golpe. Se va de a poquito. Y uno se da cuenta tarde.").
   En amor el "cierre" SIEMPRE es {"tipo": "reflexion", "texto": "..."}."""
 
 DOPAMINA_FICCION = """ESTRUCTURA DOPAMÍNICA (manda sobre todo lo demás: nadie debe deslizar al siguiente video)
@@ -63,7 +76,10 @@ DOPAMINA_FICCION = """ESTRUCTURA DOPAMÍNICA (manda sobre todo lo demás: nadie 
 - Ritmo que cambia: una línea de dos palabras después de una larga; preguntas; silencios marcados con puntos.
 - Últimos 5 segundos: el golpe final cierra el bucle del gancho y deja una pregunta o una emoción que invita a comentar
   o a volver a verlo.
-- Prohibido: introducciones, explicar el chiste o el miedo, despedidas, pedir like."""
+- Prohibido: introducciones, explicar el chiste o el miedo, despedidas, pedir like.
+- Expectativa contra realidad: si la siguiente línea es lo que el espectador ya adivinaba, cámbiala por algo que no esperaba.
+- Pregunta, anticipación, respuesta no obvia, nueva pregunta: deja pistas antes de cada revelación y págalas todas.
+- Que den ganas de mandarlo a alguien ("esto me pasó", "así me dejó") y de comentar (qué harías tú, de qué lado estás)."""
 
 PASO_FICCION = """Eres guionista de cortometrajes animados verticales para un canal de shorts, con el método de guion de Zepfilms.
 Escribes un corto de GENERO a partir de la idea que te dan. Si la idea es vaga, elige la premisa más fuerte.
@@ -75,10 +91,10 @@ Escribes un corto de GENERO a partir de la idea que te dan. Si la idea es vaga, 
 {dopamina}
 
 REGLAS DE ESCRITURA
-- 140 a 200 palabras en total entre todas las líneas (el corto dura de 70 a 100 segundos).
+- Terror 140 a 200 palabras en total; amor 110 a 170 (el corto dura de 60 a 100 segundos).
 - Cada línea es lo que dice UNA voz. "quien" es "narrador" o el id de un personaje.
 - En terror casi todo es narrador; los otros personajes dicen pocas líneas y cortas.
-- En amor no hay narrador: solo los dos personajes.
+- En amor casi siempre son solo los dos personajes; si usas la estructura d) puede haber una voz en off ("narrador").
 - Números con letra. Sin acotaciones dentro del texto, salvo acotaciones de actuación en inglés entre corchetes
   que la voz sabe interpretar, máximo tres en todo el corto: [whispers], [sighs], [laughs softly], [nervous].
 - Nada de violencia gráfica ni sangre explícita: el miedo sale de lo que no cuadra y de lo que no se ve.
@@ -112,7 +128,7 @@ Revisa en este orden y corrige:
 5. Diálogo con subtexto, fiel a cada personaje, español de México natural.
 6. Lo que no se ve no existe: nada de pensamientos explicados.
 7. Golpe final corto y que reencuadre todo (terror) o invitación concreta y reflexión que no repita (amor).
-8. Largo total entre 140 y 200 palabras.
+8. Largo total: terror 140 a 200 palabras, amor 110 a 170. Amor: frases de 2 a 9 palabras, simples, sin poesía, que duelan.
 9. Estructura dopamínica: gancho que abre un bucle en 2 segundos, una micro recompensa cada 2 o 3 líneas, bucles
    anidados, lo más fuerte al final. Marca la línea exacta donde el espectador se iría y arréglala.
 
@@ -155,7 +171,7 @@ Ambientes: terror (luz fría violeta, niebla), noche (azul profundo con luces de
 ESCENA
 {{"linea": número de la línea donde empieza la escena (1 a N, el de la lista numerada), "desde": "2 o 3 palabras EXACTAS de esa línea",
   "set": "patio",
-  "toma": [{{"t": 0, "pos": [x,y,z], "mira": [x,y,z]}}, {{"t": 1, "pos": [...], "mira": [...]}}],
+  "plano": "general | dos | medio:ID | primer:ID | detalle:ID | hombro:ID_DE_ESPALDAS:ID_DE_FRENTE | pov:ID[:ID_AL_QUE_MIRA] | nuca:ID",
   "ocultar": ["ids que no deben salir en esta toma"], "extra": [objetos solo de esta toma],
   "animar": [{{"id": "", "t0": 0, "t1": 1, "girar": [0,40,0] | "mover": [x,y,z] | "mirar": [0,35,0] | "parpadeo": true | "apagar": true}}],
   "hora": "2:00 a.m. (solo terror, cuando avanza)", "golpe": true (solo en los sustos),
@@ -164,15 +180,19 @@ ESCENA
   "alerta": "texto corto de alerta (opcional, terror)"}}
 Una escena con "pantalla" puede ir sin set: se ve el celular sobre la última toma.
 
-LENGUAJE DE CÁMARA (como los cortos de referencia)
-- Variedad: plano de establecimiento, plano medio de dos, primer plano del pecho o la cara del que habla, inserto de un objeto
-  clave (el reloj, la puerta, el celular, los pies), y en terror muchas tomas en primera persona (cámara a 1.6 m de altura
-  mirando lo que ve el narrador).
-- En amor: corta al que habla. Primer plano a 1.0 a 1.4 m del pecho, la cámara a la altura del pecho. Planos generales con las luces.
-- En terror: tomas lentas que se acercan, contrapicados, lo raro a medio cuadro u oculto. Los pies mojados, la puerta, el espejo.
-- La cámara SIEMPRE a más de 0.8 m de cualquier objeto y dentro del cuarto (|x| < ancho/2 - 0.3, z < fondo/2 + 2).
-- "mira" apunta a la altura del detalle (pecho, cabeza, objeto). Se mueve poco: 0.2 a 0.8 m entre t=0 y t=1.
-- Cada línea de diálogo tiene al menos una toma de quien la dice. Cada "plantar" tiene un inserto.
+CÁMARA AUTOMÁTICA: NO escribas coordenadas de cámara. Elige el "plano" y el motor coloca la cámara a la distancia y altura
+correctas, con la cabeza completa y un movimiento suave.
+- general: todo el set, para abrir o cerrar. dos: los dos personajes juntos.
+- medio:ID de la cintura para arriba. primer:ID cara y pecho, el plano de las emociones.
+- hombro:A:B por encima del hombro de A viendo a B (el clásico de diálogo; B es quien habla).
+- pov:ID lo que ve ese personaje (en terror, el narrador viendo lo raro); pov:ID:OTRO mirando a otro personaje.
+- nuca:ID detrás de alguien, viendo hacia donde mira. detalle:ID un objeto clave (el celular, la puerta, el reloj, la taza).
+- En amor: casi siempre primer o hombro de QUIEN HABLA en esa línea; de vez en cuando primer de quien escucha
+  callado (la reacción duele más que la frase); dos o general solo para abrir, para un silencio y para cerrar.
+- En terror: muchos pov y nuca del narrador; detalle en cada cosa que no cuadra; primer del otro personaje cuando habla.
+- Cada línea de diálogo tiene al menos una toma de quien la dice. Cada "plantar" tiene un detalle.
+- Los objetos del set van lejos entre sí (al menos 1 m) y los personajes a 1.2 a 2 m uno del otro.
+- Nada de letreros, carteles, pantallas con texto ni logos en los objetos.
 
 REGLAS
 - Toda escena lleva "linea" (la primera es la 1). Varias escenas pueden caer en la misma línea larga; van en orden.
@@ -180,7 +200,7 @@ REGLAS
 - PERSONAJES VIVOS: nunca alineados mirando a cámara como en foto. Se miran entre sí (en amor, girados 25 a 45 grados uno
   hacia el otro), están sentados, recargados o caminando según la acción, y cambian de pose entre sets o momentos
   ("pose" distinta en "extra" con el mismo id no se permite: usa otro set o "animar" con "mover", "girar" o "mirar").
-- Cada escena tiene una "toma" con movimiento real de cámara (0.3 a 0.8 m entre t=0 y t=1) y ninguna dura más de 4 segundos.
+- Cada escena lleva "plano" y ninguna dura más de 4 segundos.
 - Las escenas van en el orden del guion. 18 a 30 escenas.
 - JSON compacto, números con máximo 2 decimales.
 

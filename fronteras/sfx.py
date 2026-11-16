@@ -3,6 +3,8 @@
 whoosh  cada cambio de toma
 golpe   cuando entra un dibujo o cambia la época
 tic     el reloj del año que corre
+riser   sube la tensión y termina justo en la revelación (segundo gancho sonoro)
+pop     una etiqueta o pantalla que aparece
 """
 import wave
 import numpy as np
@@ -52,19 +54,40 @@ def tic(rng, dur=0.05):
     return np.sin(2 * np.pi * 2400 * t) * np.exp(-t * 120) * 0.25
 
 
+def riser(rng, dur=1.4):
+    """Ruido que se abre y un tono que sube; termina exactamente en el segundo del evento."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    k = t / dur
+    x = _ruido(n, rng)
+    brillo = x - _filtro(x, 600 + 5000 * k[-1] * 0.2)
+    f = 180 * (1 + 3 * k ** 2)
+    tono = np.sin(2 * np.pi * np.cumsum(f) / SR) * 0.25
+    env = k ** 2.2
+    return (brillo * 0.35 + tono) * env
+
+
+def pop(rng, dur=0.08):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    f = 900 * np.exp(-t * 30) + 300
+    return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 55) * 0.5
+
+
 def componer(duracion, eventos, ruta, semilla=3):
     """eventos: lista de (segundo, tipo) con tipo en whoosh, golpe, tic."""
     rng = np.random.default_rng(semilla)
     total = int(SR * (duracion + 2))
     pista = np.zeros((total, 2))
-    banco = {"whoosh": [whoosh(rng) for _ in range(4)], "golpe": [golpe(rng)], "tic": [tic(rng)]}
+    banco = {"whoosh": [whoosh(rng) for _ in range(4)], "golpe": [golpe(rng)], "tic": [tic(rng)], "riser": [riser(rng)], "pop": [pop(rng)]}
     for k, (seg, tipo) in enumerate(eventos):
         sonidos = banco.get(tipo)
         if not sonidos:
             continue
         s = sonidos[k % len(sonidos)]
         # el whoosh llega a su punto justo en el corte
-        ini = int((seg - (0.25 if tipo == "whoosh" else 0.0)) * SR)
+        antes = {"whoosh": 0.25, "riser": len(s) / SR, "pop": 0.015}.get(tipo, 0.0)
+        ini = int((seg - antes) * SR)
         ini = max(0, ini)
         fin = min(total, ini + len(s))
         pan = rng.uniform(-0.3, 0.3)

@@ -92,6 +92,8 @@ class Corto(Short):
                 ocultar = set(e.get("ocultar") or [])
                 m["objetos"] = [o for o in objs if o.get("id") not in ocultar]
                 m.setdefault("ambiente", "terror" if self.genero == "terror" else "noche")
+                if e.get("plano"):  # cámara automática: el motor calcula dónde va según los personajes
+                    m["plano"] = e["plano"]
                 m["camara"] = e.pop("toma", None) or e.get("camara_3d") or m.get("camara") or \
                     [{"t": 0, "pos": [0, 1.5, 4], "mira": [0, 1, 0]}, {"t": 1, "pos": [0.3, 1.4, 3.3], "mira": [0, 1, 0]}]
                 for k in ("animar", "etiquetas", "flechas", "lente", "desenfoque", "exposicion"):
@@ -174,7 +176,13 @@ class Corto(Short):
                 a = dict(e, _t1=mitad)
                 b = copy.deepcopy(e)
                 b["_t0"] = mitad
-                b["modelo"]["camara"] = _otro_angulo(b["modelo"].get("camara"))
+                if b["modelo"].get("plano"):
+                    tipo, _, resto = str(b["modelo"]["plano"]).partition(":")
+                    otro = {"primer": "medio", "medio": "primer", "dos": "general", "general": "dos", "detalle": "dos",
+                            "hombro": "dos", "pov": "dos", "nuca": "dos"}.get(tipo, "dos")
+                    b["modelo"]["plano"] = otro + (":" + resto.split(":")[0] if otro in ("primer", "medio") and resto else "")
+                else:
+                    b["modelo"]["camara"] = _otro_angulo(b["modelo"].get("camara"))
                 partidas += [a, b]
             else:
                 partidas.append(e)
@@ -256,7 +264,7 @@ class Corto(Short):
             x = self.W / 2 - total / 2
             if True:  # caja oscura difuminada detrás para que se lea sobre cualquier toma
                 caja = skia.Rect.MakeXYWH(x - tam * 0.45, y - tam * 0.95, total + tam * 0.9, tam * 1.3)
-                p = skia.Paint(AntiAlias=True, Color4f=col("#0A0A10", (0.55 if self.genero == "terror" else 0.35) * a))
+                p = skia.Paint(AntiAlias=True, Color4f=col("#0A0A10", 0.6 * a))
                 p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 14))
                 c.drawRoundRect(caja, 18, 18, p)
             if self.genero != "terror":
@@ -267,8 +275,8 @@ class Corto(Short):
                 dicha = t >= w["t0"] - 0.03
                 if self.genero != "terror":
                     ahora = w["t0"] - 0.03 <= t < w["t1"] + 0.1
-                    escribe(c, pal, x, y, fi if ahora else f, "#D98A97" if ahora else "#EDE6D6", alfa=a * (1.0 if dicha else 0.0),
-                            centro=False, sombra=0.9)
+                    escribe(c, pal, x, y, fi if ahora else f, "#FFB3C1" if ahora else "#EDE6D6", alfa=a * (1.0 if dicha else 0.45),
+                            centro=False, sombra=1.0)
                     x += an + esp
                     continue
                 clave = self._es_clave(w, j == len(g) - 1) and quien == "narrador" and self.genero == "terror"
@@ -418,9 +426,16 @@ class Corto(Short):
     def eventos(self):
         ev = []
         for i, e in enumerate(self.escenas):
-            if self.genero == "terror" and (e.get("golpe") or e.get("pantalla") or e.get("alerta")) and i > 0:
+            if self.genero == "terror" and (e.get("golpe") or e.get("alerta")) and i > 0:
                 ev.append((e["_t0"], "golpe"))
-        return ev
+            if e.get("pantalla") and i > 0:
+                ev.append((e["_t0"] + 0.05, "pop"))
+        if self.genero == "terror":  # el golpe final llega con un riser que termina justo en la última línea
+            inicios = self._inicios_de_linea()
+            if len(inicios) >= 3:
+                t_final = inicios[-1][0]
+                ev += [(t_final, "riser"), (t_final, "golpe")]
+        return sorted(ev)
 
     def dibujar(self, c, t):
         e = self.escena_en(t)

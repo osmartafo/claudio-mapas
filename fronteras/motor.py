@@ -322,8 +322,8 @@ def _ajuste_luz(carpeta):
             medias.append(g.mean())
             quemado.append((g > 0.94).mean())
         media, q = float(np.mean(medias)), float(np.mean(quemado))
-        if q > 0.12 or media > 0.68:
-            return 0.6
+        if q > 0.05 or media > 0.6:  # también manchas quemadas grandes (faros, ventanas), no solo toda la toma
+            return 0.62
         if media < 0.05:
             return 1.8
     except Exception as err:
@@ -937,6 +937,20 @@ class Short:
                     ev.append((e["_t0"] + k * 0.13, "tic"))
             if e.get("broll"):
                 ev.append((e["broll"]["_ti"] + 0.05, "golpe"))
+            m = e.get("modelo") if isinstance(e.get("modelo"), dict) else None
+            if m and e.get("tipo") == "3d":  # cada etiqueta que aparece en 3D lleva un pop
+                dur = e.get("_t1", e["_t0"] + 3) - e["_t0"]
+                for et in m.get("etiquetas") or []:
+                    ev.append((e["_t0"] + float(et.get("t0", 0.3)) * dur, "pop"))
+        # la revelación del guion: un riser que termina justo cuando se dice (segundo gancho sonoro)
+        if self.spec.get("revelacion"):
+            try:
+                t_rev = self.voz.en(self.spec["revelacion"])
+                if t_rev > 2:
+                    ev.append((t_rev, "riser"))
+                    ev.append((t_rev, "golpe"))
+            except (ValueError, KeyError):
+                pass
         ev.append((self.T_FIN, "golpe"))
         return sorted(ev)
 

@@ -97,8 +97,17 @@ def preparar_en_segundo_plano():
     threading.Thread(target=tarea, daemon=True).start()
 
 
+# letreros, carteles y pantallas traen marcas y textos ajenos: nunca salen en los videos
+_PROHIBIDAS = ("sign", "poster", "billboard", "banner", "logo", "label", "sticker", "signboard", "license_plate", "newspaper",
+               "magazine", "book_cover", "pennant", "tag")
+
+
+def _permitida(c):
+    return not any(p in c for p in _PROHIBIDAS)
+
+
 def categorias():
-    return sorted(indice() or {})
+    return sorted(c for c in (indice() or {}) if _permitida(c))
 
 
 def precargar(spec):
@@ -131,7 +140,7 @@ def categorias_para(objetos, guion=""):
     import re
     palabras = {w for o in objetos for w in re.findall(r"[a-z]+", str(o).lower()) if len(w) > 2}
     palabras |= {w[:-1] for w in palabras if w.endswith("s")}
-    elegidas = [c for c in todas if c in BASICAS or palabras & set(re.findall(r"[a-z]+", c))]
+    elegidas = [c for c in todas if (c in BASICAS or palabras & set(re.findall(r"[a-z]+", c))) and _permitida(c)]
     return elegidas if len(elegidas) >= 25 else todas
 
 
@@ -141,6 +150,8 @@ MAX_BYTES_RAPIDO = int(os.environ.get("FRONTERAS_MODELO_MAX_MB", "15")) * 1_000_
 def obtener(categoria, evitar=()):
     """Devuelve (ruta_local_glb, credito) del mejor modelo de la categoría, o None."""
     ind = indice() or {}
+    if not _permitida(str(categoria).lower()):
+        return None
     opciones = ind.get(categoria) or ind.get(categoria.lower().replace(" ", "_")) or []
     # primero los modelos ligeros (cargan y se dibujan más rápido); los pesados solo si no hay otro
     opciones = sorted(opciones, key=lambda m: m.get("tam", 0) > MAX_BYTES_RAPIDO)

@@ -193,6 +193,9 @@ correctas, con la cabeza completa y un movimiento suave.
 - Cada línea de diálogo tiene al menos una toma de quien la dice. Cada "plantar" tiene un detalle.
 - Los objetos del set van lejos entre sí (al menos 1 m) y los personajes a 1.2 a 2 m uno del otro.
 - Nada de letreros, carteles, pantallas con texto ni logos en los objetos.
+- El mundo siente lo que siente la historia: la primera idea siempre sale "bonita, de día de campo"; si duele, noche fría y
+  pocas luces; si da miedo, oscuridad, niebla y una sola luz práctica. Nada de objetos a menos de 2 m de la cámara
+  tapando caras.
 
 REGLAS
 - Toda escena lleva "linea" (la primera es la 1). Varias escenas pueden caer en la misma línea larga; van en orden.

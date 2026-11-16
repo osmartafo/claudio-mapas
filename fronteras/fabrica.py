@@ -184,6 +184,12 @@ def revisar_final(video, duracion, hasta=None):
         r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-t", f"{hasta or duracion:.2f}", "-i", video, "-vf", "blackdetect=d=1.5:pix_th=0.06",
                             "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True, timeout=600)
         negros = [l for l in r.stderr.splitlines() if "black_start" in l]
+        # imagen congelada (cámara trabada o toma perdida): más de 1.5 s sin cambio antes del final
+        rf = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-t", f"{hasta or duracion:.2f}", "-i", video, "-vf",
+                             "freezedetect=n=0.002:d=1.5", "-an", "-f", "null", "-"], capture_output=True, text=True, timeout=600)
+        congelados = [l for l in rf.stderr.splitlines() if "freeze_start" in l]
+        if congelados:
+            problemas.append(f"{len(congelados)} tramos con la imagen congelada de más de 1.5 s")
         if negros:
             problemas.append(f"{len(negros)} tramos negros de más de 1.5 s")
         lufs = [l for l in r.stderr.splitlines() if l.strip().startswith("I:")]

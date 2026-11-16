@@ -575,7 +575,21 @@ class Short:
             return False
         i = int(clamp(round((t - e["_t0"]) * FPS_3D), 0, n - 1))
         img = skia.Image.open(os.path.join(e["_cuadros"], f"c{i:05d}.jpg"))
-        c.drawImageRect(img, skia.Rect(0, 0, self.W, self.H), skia.SamplingOptions(skia.FilterMode.kLinear))
+        # sacudida en los golpes: cambia de lado cada cuadro y se apaga en 7 cuadros (como en los shorts de referencia)
+        if not hasattr(self, "_sacudidas"):
+            try:
+                self._sacudidas = [s for s, tipo in self.eventos() if tipo == "golpe" and s < getattr(self, "T_FIN", 1e9) - 0.1]
+            except Exception:
+                self._sacudidas = []
+        dx = dy = 0.0
+        for s in self._sacudidas:
+            k = int((t - s) * FPS)
+            if 0 <= k < 7:
+                amp = 16 * (1 - k / 7)
+                dx, dy = amp * (1 if k % 2 == 0 else -1), amp * 0.6 * (1 if k % 3 == 0 else -1)
+        m = 0.02 if (dx or dy) else 0.0
+        c.drawImageRect(img, skia.Rect(-self.W * m + dx, -self.H * m + dy, self.W * (1 + m) + dx, self.H * (1 + m) + dy),
+                        skia.SamplingOptions(skia.FilterMode.kLinear))
         return True
 
     # ---- cámara: corte suave entre escenas y empuje lento dentro de cada una

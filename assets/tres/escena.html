@@ -512,6 +512,14 @@ function tomaAuto(plano, d) {
     const caja = new THREE.Box3().setFromObject(q.g).expandByScalar(0.25);
     if (caja.containsPoint(pos)) pos.add(pos.clone().sub(mira).setY(0).normalize().multiplyScalar(0.6));
   }
+  // nada entre la cámara y lo que mira: si un objeto tapa el rayo, la cámara se pone delante de él
+  if (tipo !== 'pov') {
+    const ray = new THREE.Raycaster(mira.clone(), pos.clone().sub(mira).normalize(), 0.35, mira.distanceTo(pos));
+    const ignorar = new Set();
+    for (const o of d.objetos || []) if (['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === id || o.id === id2) objetos[o.id] && objetos[o.id].traverse(n => ignorar.add(n));
+    const choques = ray.intersectObjects(escena.children, true).filter(h => h.object.isMesh && !ignorar.has(h.object) && h.object.visible);
+    if (choques.length) pos = mira.clone().add(pos.clone().sub(mira).normalize().multiplyScalar(Math.max(0.6, choques[0].distance - 0.3)));
+  }
   // movimiento: acercamiento suave y un leve desplazamiento lateral
   const dir = mira.clone().sub(pos); const lat = lado(dir.clone().setY(0).normalize()).multiplyScalar(0.12);
   const fin = pos.clone().add(dir.multiplyScalar(tipo === 'pov' ? 0.06 : 0.1)).add(lat);

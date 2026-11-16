@@ -258,6 +258,16 @@ ESQUELETO (llénalo primero, es tu escaleta)
 - siembra: qué detalle del gancho se paga en el remate
 - cierre: la última frase conecta con la primera para que el video se vea en bucle
 
+FÓRMULA DE LOS SHORTS QUE MÁS RETIENEN (estúdiala, no la copies)
+- Gancho: el dato absurdo en UNA frase, sin introducción.
+- Lugar y época si aplica (año, lugar, orgullo), en media frase.
+- Escalada de tres o cuatro momentos, cada uno más grande. Luego el momento en que todo se rompe.
+- Doble línea seca para el humor: "Por suerte…" / "Por desgracia…".
+- La explicación entra con un giro fijo ("Fíjate…") y una comparación cotidiana que cualquiera entiende.
+- Consecuencia y remate con sorpresa. El video termina en la última palabra, sin despedida.
+- Nunca describas con la voz lo que ya se está viendo: la voz agrega, la imagen muestra.
+- Ritmo de corrido: frases que se dicen sin pausas largas (unas 3.5 palabras por segundo).
+
 """ + DOPAMINA + """
 
 GUION
@@ -295,6 +305,10 @@ Responde SOLO con JSON
 
 PASO_DIRECCION = """Eres el director de animación 3D de un canal de shorts. Recibes un guion final y su esqueleto.
 Tu trabajo es dirigir el video con UN CORTE CADA 2.5 A 4 SEGUNDOS (12 a 18 escenas), con modelos 3D reales.
+Lecciones de los shorts animados que más retienen: la cámara nunca se queda quieta (cada toma se acerca o se desliza);
+cada cosa que pasa en pantalla cae justo antes de su palabra; el mundo siente lo que siente la historia (la primera idea
+siempre sale "bonita"; si es peligro, humo y luz naranja; si es misterio, noche); nada a menos de 2 m del lente tapando
+lo importante; una cifra va discreta arriba, sin tapar el objeto; la imagen muestra lo que la voz NO dice.
 
 ESCENA 3D (el tipo principal, 70 a 85 por ciento)
 {"desde": "2 o 3 palabras exactas del guion", "tipo": "3d", "cifra": "opcional, máximo 4 palabras",

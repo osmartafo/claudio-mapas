@@ -44,8 +44,14 @@ def responder(chat_id, texto):
     h = historial[chat_id]
     h.append({"role": "user", "content": texto})
     c = anthropic.Anthropic()
-    r = c.messages.create(model=MODELO, max_tokens=1500, messages=list(h),
-                         system=[{"type": "text", "text": SISTEMA, "cache_control": {"type": "ephemeral"}}])
+    params = dict(model=MODELO, max_tokens=4000, messages=list(h),
+                  system=[{"type": "text", "text": SISTEMA, "cache_control": {"type": "ephemeral"}}],
+                  extra_body={"output_config": {"effort": "low"}})  # pensar poco: si no, se gasta el espacio y no contesta
+    try:
+        r = c.messages.create(**params)
+    except anthropic.BadRequestError:
+        params.pop("extra_body")
+        r = c.messages.create(**params)
     salida = "".join(b.text for b in r.content if b.type == "text").strip()
     try:
         datos = json.loads(repair_json(salida))

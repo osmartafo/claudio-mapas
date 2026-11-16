@@ -204,14 +204,8 @@ def _escribir(tema, api_key=None, estilo_texto="", modo="mapas", busquedas=None)
     # el estilo va en el mensaje y no en el sistema, así el sistema se queda en caché y sale más barato
     mensajes = [{"role": "user", "content": f"Tema del video: {tema}\n\n{estilo_texto}".strip()}]
     # se pide en streaming: con un tope alto de salida la API lo exige y nunca se queda corto el guion
-    with cliente.messages.stream(
-        model=MODELO,
-        max_tokens=int(os.environ.get("FRONTERAS_TOKENS", "32000")),
-        system=[{"type": "text", "text": SISTEMA_CURIOSIDADES if modo == "curiosidades" else SISTEMA, "cache_control": {"type": "ephemeral"}}],
-        messages=mensajes,
-        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": busquedas or int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}],
-    ) as flujo:
-        r = flujo.get_final_message()
+    sistema = SISTEMA_CURIOSIDADES if modo == "curiosidades" else SISTEMA
+    r = _una_llamada(cliente, sistema, mensajes[0]["content"], int(os.environ.get("FRONTERAS_TOKENS", "32000")), True, busquedas)
     texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
     i = texto.find("{")
     if i < 0:
@@ -333,21 +327,49 @@ Responde SOLO con JSON {"escenas": [ ... ]}
 """
 
 
-def _llamar(cliente, sistema, contenido, max_tokens, buscar=False, busquedas=None):
+_ESFUERZO_OK = {"valor": True}  # si la API no acepta el ajuste de esfuerzo, se deja de mandar
+
+
+def _una_llamada(cliente, sistema, contenido, max_tokens, buscar, busquedas):
     params = dict(model=MODELO, max_tokens=max_tokens, messages=[{"role": "user", "content": contenido}],
                   system=[{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}])
     if buscar:
         params["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": busquedas or int(os.environ.get("FRONTERAS_BUSQUEDAS", "3"))}]
-    with cliente.messages.stream(**params) as flujo:
-        r = flujo.get_final_message()
-    texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
-    i = texto.find("{")
-    if i < 0:
-        raise ValueError(f"La IA no devolvió el formato esperado (motivo {r.stop_reason}). Intenta de nuevo.")
-    datos = json.loads(repair_json(texto[i:]))
-    if not isinstance(datos, dict):
-        raise ValueError("La IA no devolvió el formato esperado. Intenta de nuevo.")
-    return datos
+    if _ESFUERZO_OK["valor"]:
+        # esfuerzo bajo: el modelo piensa poco y gasta sus tokens en el JSON (antes se le iban pensando y se cortaba)
+        params["extra_body"] = {"output_config": {"effort": os.environ.get("FRONTERAS_ESFUERZO", "low")}}
+    try:
+        with cliente.messages.stream(**params) as flujo:
+            return flujo.get_final_message()
+    except anthropic.BadRequestError as err:
+        if "extra_body" in params and ("effort" in str(err) or "output_config" in str(err)):
+            _ESFUERZO_OK["valor"] = False
+            params.pop("extra_body")
+            with cliente.messages.stream(**params) as flujo:
+                return flujo.get_final_message()
+        raise
+
+
+def _llamar(cliente, sistema, contenido, max_tokens, buscar=False, busquedas=None):
+    """Pide JSON a la IA. Si la respuesta se corta antes del JSON (se le acabó el espacio), lo intenta una vez más
+    con el doble de espacio y la indicación de ir directo al JSON."""
+    ultimo = None
+    for intento in range(2):
+        tope = max_tokens if not intento else min(32000, int(max_tokens * 2))
+        pedido = contenido if not intento else contenido + "\n\nResponde DIRECTO con el JSON, sin explicaciones antes ni después."
+        r = _una_llamada(cliente, sistema, pedido, tope, buscar, busquedas)
+        texto = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+        i = texto.find("{")
+        if i >= 0:
+            try:
+                datos = json.loads(repair_json(texto[i:]))
+            except Exception:
+                datos = None
+            if isinstance(datos, dict) and datos:
+                return datos
+        ultimo = r.stop_reason
+        print(f"Respuesta de la IA sin JSON útil (motivo {ultimo}, intento {intento + 1})")
+    raise ValueError(f"La IA no devolvió el formato esperado (motivo {ultimo}). Intenta de nuevo.")
 
 
 def escribir_curiosidad(tema, api_key=None, estilo_texto="", aviso=lambda *a: None):

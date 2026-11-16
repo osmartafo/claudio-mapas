@@ -37,6 +37,14 @@ o, cuando toca hacer un video ("modo" es "curiosidades", "mapas", "terror" o "am
 {"respuesta": "Va, empiezo con ...", "video": {"tema": "tema claro", "horizontal": false, "modo": "curiosidades"}}
 """
 
+from . import generos
+if generos.apagado("amor"):
+    SISTEMA += """
+CORTOS DE AMOR APAGADOS
+- Los cortos de amor están apagados. Nunca los propongas en ideas. Si el dueño pide uno, dile en una línea que están apagados
+  por ahora y no hagas video ("video": null).
+"""
+
 historial = defaultdict(lambda: deque(maxlen=16))
 
 

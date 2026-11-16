@@ -9,7 +9,8 @@ from telegram import (Update, InlineKeyboardButton as Boton, InlineKeyboardMarku
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-from .fabrica import hacer_video
+from .fabrica import hacer_video, modo_de
+from . import generos
 from . import guionista, youtube, facebook, charla, ajustes, monitor, estilos, looks, tiktok, marca
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -52,10 +53,12 @@ contador = {"idea": 0, "video": max(hechos, default=0)}
 B_IDEAS, B_NUEVO, B_FORMATO, B_ESTADO, B_AYUDA = "💡 Ideas", "🎬 Nuevo video", "📐 Formato", "📊 Estado", "❓ Ayuda"
 B_ESTILO, B_PILOTO = "🎨 Estilo", "🤖 Piloto automático"
 B_CURIOSIDAD, B_MAPA, B_TERROR, B_AMOR = "🧩 Curiosidad 3D", "🗺️ Historia con mapa", "👻 Corto de terror", "💘 Corto de amor"
-TIPOS = {B_CURIOSIDAD: "curiosidades", B_MAPA: "mapas", B_TERROR: "terror", B_AMOR: "amor"}
-NOMBRE_TIPO = {"curiosidades": "🧩 Curiosidad 3D", "mapas": "🗺️ Historia con mapa", "terror": "👻 Corto de terror", "amor": "💘 Corto de amor"}
+TIPOS = {b: m for b, m in {B_CURIOSIDAD: "curiosidades", B_MAPA: "mapas", B_TERROR: "terror", B_AMOR: "amor"}.items()
+         if not generos.apagado(m)}
+NOMBRE_TIPO = {m: n for m, n in {"curiosidades": "🧩 Curiosidad 3D", "mapas": "🗺️ Historia con mapa", "terror": "👻 Corto de terror",
+                                 "amor": "💘 Corto de amor"}.items() if not generos.apagado(m)}
 # menú principal: arriba qué tipo de video quieres, en medio ideas y piloto, abajo ajustes
-TECLADO = ReplyKeyboardMarkup([[B_CURIOSIDAD, B_MAPA], [B_TERROR, B_AMOR], [B_IDEAS, B_PILOTO], [B_ESTILO, B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
+TECLADO = ReplyKeyboardMarkup([[B_CURIOSIDAD, B_MAPA], [b for b in (B_TERROR, B_AMOR) if b in TIPOS], [B_IDEAS, B_PILOTO], [B_ESTILO, B_FORMATO, B_ESTADO, B_AYUDA]], resize_keyboard=True,
                               input_field_placeholder="Escríbeme o mándame un audio…")
 
 PASOS = ["Guion investigado y verificado", "Voz grabada", "Música original", "Mapas animados"]
@@ -190,7 +193,8 @@ def botones_estilo(chat, seccion="look", video=None):
         agrega(("✅ " if p.get("modo") == "curiosidades" else "") + "🧩 Curiosidades 3D", "est:modo:curiosidades")
         agrega(("✅ " if p.get("modo") == "mapas" else "") + "🗺️ Historia con mapas", "est:modo:mapas")
         agrega(("✅ " if p.get("modo") == "terror" else "") + "👻 Cortos de terror", "est:modo:terror")
-        agrega(("✅ " if p.get("modo") == "amor" else "") + "💘 Cortos de amor", "est:modo:amor")
+        if not generos.apagado("amor"):
+            agrega(("✅ " if p.get("modo") == "amor" else "") + "💘 Cortos de amor", "est:modo:amor")
     else:
         agrega(("✅ " if not p.get("voz") else "") + "🎲 Automática", "est:voz:auto")
         for v in estilos._voces():
@@ -322,6 +326,8 @@ async def piloto_uno(app: Application, chat):
     usados = set(hechos_antes) | set(ajustes.ideas_dadas())
     # primero la reserva de ideas que ya se pagaron; solo si se acabó se le piden más a la IA (una llamada rinde varios días)
     tema = ajustes.sacar_idea_piloto(usados)
+    while tema and generos.apagado(modo_de(tema)):  # ideas guardadas de un tipo apagado se saltan
+        tema = ajustes.sacar_idea_piloto(usados)
     for _ in range(0 if tema else 2):
         try:
             clave = f"piloto-{time.time()}"
@@ -330,7 +336,7 @@ async def piloto_uno(app: Application, chat):
         except Exception:
             logging.exception("piloto ideas")
             ideas = []
-        nuevas = [i for i in ideas if i not in usados]
+        nuevas = [i for i in ideas if i not in usados and not generos.apagado(modo_de(i))]
         if nuevas:
             tema = nuevas[0]
             ajustes.guardar_ideas_piloto(nuevas[1:])
@@ -397,7 +403,7 @@ async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     texto = (f"<b>Bienvenido a {marca.NOMBRE}</b>\n<i>{marca.LEMA}</i>\n\n"
              "Soy tu fábrica de videos cortos. Platica conmigo por texto o 🎙️ nota de voz.\n\n"
              "🧩 Curiosidades en 3D   🗺️ Historia con mapas\n"
-             "👻 Cortos de terror   💘 Cortos de amor\n\n"
+             + ("👻 Cortos de terror\n\n" if generos.apagado("amor") else "👻 Cortos de terror   💘 Cortos de amor\n\n") +
              "💡 Te propongo ideas y las eliges con un toque\n"
              "🎬 Escribo con el método Zepfilms, grabo las voces y animo\n"
              "🚀 Lo publico en Facebook, Instagram, YouTube y TikTok\n"
@@ -405,7 +411,7 @@ async def inicio(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
              "🤖 Con el piloto automático hago y publico videos solo\n\n"
              f"Tu número de usuario es <code>{update.effective_user.id}</code>")
     menu = Botones([[Boton("🧩 Curiosidad", callback_data="tipo:curiosidades"), Boton("🗺️ Mapa", callback_data="tipo:mapas")],
-                    [Boton("👻 Terror", callback_data="tipo:terror"), Boton("💘 Amor", callback_data="tipo:amor")],
+                    [Boton("👻 Terror", callback_data="tipo:terror")] + ([] if generos.apagado("amor") else [Boton("💘 Amor", callback_data="tipo:amor")]),
                     [Boton("💡 Dame ideas", callback_data="mas"), Boton("✍️ Tengo un tema", callback_data="propio")],
                     [Boton("🎨 Estilo y narrador", callback_data="estsec:look"), Boton("🤖 Piloto automático", callback_data="pilmenu")]])
     try:
@@ -423,7 +429,7 @@ async def ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "🎙️ <b>Notas de voz.</b> Te escucho igual que por texto\n"
         "🧩🗺️👻💘 <b>Tipo de video.</b> Toca el tipo en el menú, elige una idea o escribe la tuya\n"
         "👻 <b>Terror.</b> Leyenda urbana con lugar y hora, celular, voces distintas y encuesta final\n"
-        "💘 <b>Amor.</b> Dos personajes de noche, diálogo y reflexión al final\n"
+        + ("" if generos.apagado("amor") else "💘 <b>Amor.</b> Dos personajes de noche, diálogo y reflexión al final\n") +
         "📝 <b>/esqueleto</b> tema arma la escaleta, <b>/auditar</b> revisa un guion tuyo\n"
         "💡 <b>Ideas.</b> Toca una y empiezo el video\n"
         "📐 <b>Formato.</b> Vertical para Shorts y Reels, horizontal para YouTube normal\n"
@@ -481,7 +487,8 @@ def pedido_ideas(extra=""):
     vistas = (ajustes.ideas_dadas() + ajustes.temas_hechos())[-120:]
     return (f"Dame 8 ideas nuevas{(' ' + extra) if extra else ''}. Esta vez inspírate sobre todo en estos temas: {', '.join(cats)}. "
             "Unas 5 de curiosidades, 1 de historia o geografía con mapa, 1 corto de terror que empiece con 'Corto de terror: ' "
-            "(leyenda urbana mexicana con una regla o una anomalía) y 1 corto de amor que empiece con 'Corto de amor: '. "
+            "(leyenda urbana mexicana con una regla o una anomalía)"
+            + (" y 1 de curiosidades más. Nada de cortos de amor. " if generos.apagado("amor") else " y 1 corto de amor que empiece con 'Corto de amor: '. ") +
             "Prohibido repetir o parafrasear cualquiera de estas, ya se usaron: " + "; ".join(vistas))
 
 
@@ -489,6 +496,9 @@ async def menu_tipo(update: Update, ctx: ContextTypes.DEFAULT_TYPE, modo: str):
     """Elegiste un tipo de video: te propongo tres temas de ese tipo, uno al azar, o escribes tu idea."""
     import random
     from . import banco_temas
+    if generos.apagado(modo):
+        await update.effective_message.reply_text(generos.aviso(modo))
+        return
     banco = {"curiosidades": banco_temas.CURIOSIDADES, "mapas": banco_temas.MAPAS,
              "terror": banco_temas.TERROR, "amor": banco_temas.AMOR}[modo]
     usados = set(ajustes.temas_hechos())
@@ -531,13 +541,14 @@ async def dar_ideas(update: Update, ctx: ContextTypes.DEFAULT_TYPE, extra=""):
             ideas = []
         finally:
             charla.historial.pop(clave, None)
-        ideas = [i for i in ideas if i not in usados]
+        ideas = [i for i in ideas if i not in usados and not generos.apagado(modo_de(i))]
         if len(ideas) >= 3:
             break
     if len(ideas) < 3:
         import random
         from . import banco_temas
-        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS + banco_temas.TERROR + banco_temas.AMOR if t not in usados and t not in ideas]
+        libres = [t for t in banco_temas.CURIOSIDADES + banco_temas.MAPAS + banco_temas.TERROR + banco_temas.AMOR
+                  if t not in usados and t not in ideas and not generos.apagado(modo_de(t))]
         ideas += random.sample(libres, min(8 - len(ideas), len(libres)))
     if not ideas:
         await update.effective_message.reply_text("Ya usé todas las ideas que tenía. Escríbeme un tema y lo hago.")
@@ -647,6 +658,12 @@ async def producir(update: Update, ctx: ContextTypes.DEFAULT_TYPE, tema: str, ho
     tema = (tema or "").strip()
     if not tema:
         await pedir_tema(update)
+        return
+    if generos.apagado(modo_de(tema)):
+        await msg.reply_text(generos.aviso(modo_de(tema)))
+        return
+    if forzar and generos.apagado(forzar.get("modo")):
+        await msg.reply_text(generos.aviso(forzar["modo"]))
         return
     if cola.locked():
         estado["en_fila"] += 1
@@ -789,6 +806,9 @@ async def botones(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(texto_auditoria(spec), parse_mode=ParseMode.HTML)
     elif accion == "est":
         clave, _, val = valor.partition(":")
+        if clave == "modo" and generos.apagado(val):
+            await q.answer("Ese tipo está apagado")
+            return
         ajustes.fijar_estilo(chat, clave, val)
         await q.answer("Listo")
         seccion = {"look": "look", "cerebro": "narrador", "voz": "voz", "modo": "tipo"}.get(clave, "look")

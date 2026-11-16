@@ -7,7 +7,7 @@ Uso:
 from . import marca
 import json, os, re, sys, time, unicodedata
 
-from . import guionista, voz, musica, sfx, estilos
+from . import guionista, voz, musica, sfx, estilos, generos
 from .motor import Short, Voz
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -72,6 +72,11 @@ def hacer_video(tema, horizontal=False, aviso=lambda *a: print(*a), nuevo=False,
     """nuevo=False reusa el guion y la voz de un intento anterior del mismo tema, para no pagar dos veces.
     forzar fija partes del estilo, ej. {"look": "satelite", "cerebro": "detective", "voz": "..."}."""
     forzar = {k: v for k, v in (forzar or {}).items() if v}
+    if generos.apagado(forzar.get("modo")):  # un tipo apagado guardado en el estilo se trata como automático
+        forzar.pop("modo")
+    for m in (modo, modo_de(tema)):
+        if generos.apagado(m):
+            raise RuntimeError(generos.aviso(m))
     previa = None if nuevo else _previa(tema)
     carpeta = previa or os.path.join(SALIDA, nombre_carpeta(tema))
     os.makedirs(carpeta, exist_ok=True)

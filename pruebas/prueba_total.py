@@ -81,8 +81,15 @@ def revisar_bot():
     from fronteras import bot, fabrica
     textos = [b for fila in bot.TECLADO.keyboard for b in fila]
     assert len(textos) == len({b.text for b in textos}), "botones repetidos en el menú"
+    from fronteras import generos
     for b in (bot.B_CURIOSIDAD, bot.B_MAPA, bot.B_TERROR, bot.B_AMOR):
-        assert b in bot.TIPOS
+        assert (b in bot.TIPOS) != generos.apagado({bot.B_AMOR: "amor"}.get(b)), b
+    if generos.apagado("amor"):
+        try:
+            fabrica.hacer_video("Corto de amor: la playlist", aviso=lambda *a: None)
+            raise AssertionError("hizo un corto de amor estando apagado")
+        except RuntimeError:
+            pass
     casos = {"Corto de terror: el taquero que cierra a las dos": "terror", "Corto de amor: la playlist": "amor",
              "¿Por qué Bolivia no tiene mar?": "mapas", "Los billetes de Canadá son de plástico": "curiosidades",
              "Esa ranura de tu llave no está de adorno": "curiosidades"}
@@ -153,7 +160,8 @@ def main():
     from fronteras import fabrica
     pedidos = {"curiosidades": "Esa tapita de tu guitarra no está de adorno", "mapas": "México perdido",
                "terror": "Corto de terror: el taquero que cierra a las dos", "amor": "Corto de amor: la playlist"}
-    solo = sys.argv[1:] or list(pedidos) + ["piloto"]
+    from fronteras import generos
+    solo = sys.argv[1:] or [m for m in pedidos if not generos.apagado(m)] + ["piloto"]
     fallas = []
     try:
         revisar_bot()

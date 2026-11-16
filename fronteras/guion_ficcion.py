@@ -149,8 +149,11 @@ EL MUNDO 3D (metros, y es hacia arriba, el piso en y=0, la cámara mira hacia -z
 Formas especiales:
 - {{"id": "ana", "forma": "personaje", "pose": "de_pie|caminando|sentado|cabizbajo|brazos_cruzados|senalando|manos_cara|acostado",
    "peinado": "corto|largo|chongo|gorra", "luz": "#hex (luz del pecho, en amor: azul #4D8BFF para el triste, naranja #FF9A4D para el cálido)",
-   "color": "#hex de piel/cuerpo (tonos medios, nunca blanco puro)", "color_ropa": "#hex", "cara": "ojos|ojos_brillo (terror)",
+   "color_ropa": "#hex", "color_pelo": "#hex", "piel": "#hex (variada: clara, morena, oscura)", "vestido": true|false,
+   "expresion": "neutral|triste|herido|llora|miedo|sorpresa|enojo|sonrie|feliz|nervioso|serio", "cara": "ojos_brillo (solo la cosa rara del terror)",
    "pos": [x,0,z], "rot": [0,grados,0]}}
+  Son personajes de caricatura dibujados a mano (cabeza grande, contorno grueso, cara expresiva): la expresión es lo que más
+  cuenta, elígela para cada set según lo que siente en ese momento.
   Mide 1.7 m. De pie: pecho 1.3, cabeza 1.6. Sentado (pose sentado o cabizbajo): pecho 0.9, cabeza 1.25, y necesita una silla
   o banca de 0.45 m de alto en la misma posición. El personaje mira hacia +z con rot 0.
 - {{"id": "cuarto", "forma": "cuarto", "tam": [ancho, alto, fondo], "color": "#hex pared", "papel": "flores|rayas|azulejo",
@@ -173,7 +176,7 @@ ESCENA
   "set": "patio",
   "plano": "general | dos | medio:ID | primer:ID | detalle:ID | hombro:ID_DE_ESPALDAS:ID_DE_FRENTE | pov:ID[:ID_AL_QUE_MIRA] | nuca:ID",
   "ocultar": ["ids que no deben salir en esta toma"], "extra": [objetos solo de esta toma],
-  "animar": [{{"id": "", "t0": 0, "t1": 1, "girar": [0,40,0] | "mover": [x,y,z] | "mirar": [0,35,0] | "parpadeo": true | "apagar": true}}],
+  "animar": [{{"id": "", "t0": 0, "t1": 1, "girar": [0,40,0] | "mover": [x,y,z] | "mirar": [0,35,0] | "parpadeo": true | "apagar": true | "expresion": "llora"}}],
   "hora": "2:00 a.m. (solo terror, cuando avanza)", "golpe": true (solo en los sustos),
   "pantalla": {{"tipo": "llamada", "nombre": "Tío Beto", "contador": true}} | {{"tipo": "chat", "nombre": "Mamá ❤",
      "mensajes": [{{"de": "yo", "texto": ""}}, {{"de": "ella", "nota_voz": true}}]}} | {{"tipo": "bloqueo", "nombre": "Mamá ❤", "texto": "Nota de voz (0:03)"}},

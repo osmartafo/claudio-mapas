@@ -92,6 +92,8 @@ class Corto(Short):
                 ocultar = set(e.get("ocultar") or [])
                 m["objetos"] = [o for o in objs if o.get("id") not in ocultar]
                 m.setdefault("ambiente", "terror" if self.genero == "terror" else "noche")
+                m["genero"] = self.genero
+                m.setdefault("personajes", os.environ.get("FRONTERAS_PERSONAJES", "caricatura"))
                 if e.get("plano"):  # cámara automática: el motor calcula dónde va según los personajes
                     m["plano"] = e["plano"]
                 m["camara"] = e.pop("toma", None) or e.get("camara_3d") or m.get("camara") or \

@@ -14,6 +14,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { crearPersonaje, tonoTarjetas } from './caricatura.js';
 
 // Escena 3D estilo caricatura: sombreado en bandas, contorno negro, colores planos.
 // window.preparar(def, ancho, alto) arma la escena; window.cuadro(u) la dibuja en el instante u (0..1) y devuelve un JPEG.
@@ -34,6 +35,10 @@ function materialCine(o) {
   const p = Object.assign({ color: new THREE.Color(o.color || '#dddddd') }, t);
   if (o.material === 'luz') p.emissive = new THREE.Color(o.color || '#FFD9A0');
   if (o.transparente) Object.assign(p, { transparent: true, opacity: 0.45 });
+  // con personajes de caricatura el mundo va mate y pintado: nada de brillos que se quemen junto a una lámpara
+  if ((def.personajes || 'caricatura') === 'caricatura' && o.material !== 'luz') {
+    Object.assign(p, { roughness: Math.max(p.roughness ?? 0.6, 0.72), clearcoat: 0, metalness: Math.min(p.metalness ?? 0, 0.3), sheen: 0 });
+  }
   return new THREE.MeshPhysicalMaterial(p);
 }
 
@@ -152,7 +157,16 @@ const POSES = {
   acostado:      { cadera: [0, 0], rodilla: [0, 0], hombro: [4, -4], codo: [-5, -5], torso: 0, cabeza: 0, alto: 0.92, acostado: true },
 };
 
+// personajes de caricatura (tarjetas dibujadas a mano dentro del mundo 3D); 'facetado' deja los maniquíes viejos
+const toons = [];
 function personaje(o) {
+  if ((def.personajes || 'caricatura') === 'caricatura') {
+    const t = crearPersonaje(o, def.genero || ''); t.id = o.id; toons.push(t);
+    return t.raiz;
+  }
+  return personajeFacetado(o);
+}
+function personajeFacetado(o) {
   const raiz = new THREE.Group();
   const cuerpo = new THREE.Group(); raiz.add(cuerpo);
   const luzColor = o.luz || null;
@@ -288,7 +302,7 @@ function foco(o) {
   const g = new THREE.Group(); const c = new THREE.Color(o.color || '#FFD39A');
   const bulbo = pieza(new THREE.SphereGeometry(o.radio || 0.06, 12, 10), new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.4) }), 0, 0, 0);
   bulbo.castShadow = false; g.add(bulbo);
-  const l = new THREE.PointLight(c, Math.min(o.intensidad ?? 2.5, 3.2), o.alcance || 6, 1.6); l.castShadow = !!o.sombra; if (l.castShadow) l.shadow.mapSize.set(512, 512); g.add(l);
+  const l = new THREE.PointLight(c, Math.min(o.intensidad ?? 2.5, 2.4), o.alcance || 6, 1.8); l.castShadow = !!o.sombra; if (l.castShadow) l.shadow.mapSize.set(512, 512); g.add(l);
   luces.push({ luz: l, base: l.intensity, id: o.id, malla: bulbo, tipo: 'foco' });
   return g;
 }
@@ -320,6 +334,9 @@ window.preparar = async (d, ancho, alto) => {
   efecto = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.07, 0.07, 0.07] });
   escena = new THREE.Scene();
   const amb = AMBIENTES[d.ambiente] || null;
+  const TONO = { noche: [[0.8, 0.82, 1.0], 0.96, 0.8], terror: [[0.62, 0.62, 0.78], 0.82, 0.7], interior: [[1.0, 0.93, 0.84], 1.0, 0.85] };
+  const tn = TONO[d.ambiente] || (cine ? [[1.0, 0.9, 0.8], 1.0, 0.86] : [[1, 1, 1], 1.03, 0.9]);
+  tonoTarjetas(tn[0], tn[1] * (d.brillo_personajes || 1), tn[2]);
   escena.background = new THREE.Color(amb ? (d.fondo_cine || amb.fondo) : cine ? (d.fondo_cine || '#17110C') : (d.fondo || '#BFE6F7'));
   camara = new THREE.PerspectiveCamera(d.lente || (AMBIENTES[d.ambiente] ? 42 : cine ? 32 : 38), ancho / alto, 0.05, 400);
   if (cine) {
@@ -401,6 +418,18 @@ window.preparar = async (d, ancho, alto) => {
     const cs = sol.shadow.camera; cs.left = cs.bottom = -radio; cs.right = cs.top = radio; cs.near = 0.1; cs.far = radio * 6;
     cs.updateProjectionMatrix();
   }
+  // ningún foco quema lo que tiene cerca: se baja hasta que lo más cercano reciba una luz razonable
+  escena.updateMatrixWorld(true);
+  for (const L of luces) if (L.tipo === 'foco') {
+    const lp = L.luz.getWorldPosition(new THREE.Vector3()); let dmin = 9;
+    for (const o of d.objetos || []) {
+      if (!objetos[o.id] || ['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === L.id) continue;
+      const caja = objetos[o.id].userData.toon ? cajaToon(objetos[o.id]) : new THREE.Box3().setFromObject(objetos[o.id]);
+      if (!caja.isEmpty()) dmin = Math.min(dmin, caja.distanceToPoint(lp));
+    }
+    const tope = 1.3 * Math.pow(Math.max(dmin, 0.15), 1.8);
+    if (L.luz.intensity > tope) { L.luz.intensity = Math.max(0.35, tope); L.base = L.luz.intensity; }
+  }
   if (d.plano) def.camara = tomaAuto(d.plano, d);
   if (cine) {
     // sol bajo y cálido entrando por una persiana, más la luz principal suave
@@ -442,8 +471,15 @@ function infoPersonaje(id) {
   const pecho = cab.clone().add(new THREE.Vector3(0, -0.38, 0));
   return { g, cab, pecho, frente, pos: g.getWorldPosition(new THREE.Vector3()) };
 }
-function cajaDe(id) { const g = objetos[id]; return g ? new THREE.Box3().setFromObject(g) : null; }
+// caja de un personaje de caricatura: el cuerpo dibujado, no la tarjeta entera (que es más ancha y casi toda transparente)
+function cajaToon(g) {
+  g.updateMatrixWorld(true); const p = g.getWorldPosition(new THREE.Vector3()), md = g.userData.medidas;
+  const y0 = g.userData.toon ? g.children[0].children[0].position.y : 0;
+  return new THREE.Box3(new THREE.Vector3(p.x - 0.28, p.y, p.z - 0.28), new THREE.Vector3(p.x + 0.28, p.y + y0 + md.cabeza + md.medio, p.z + 0.28));
+}
+function cajaDe(id) { const g = objetos[id]; return g ? (g.userData.toon ? cajaToon(g) : new THREE.Box3().setFromObject(g)) : null; }
 function tomaAuto(plano, d) {
+  escena.updateMatrixWorld(true);  // sin esto el piso sigue de pie (aún no se ha dibujado) y el rayo choca con él
   const partes = String(plano).split(':');
   const tipo = partes[0], id = partes[1], id2 = partes[2];
   const personajes = (d.objetos || []).filter(o => o.forma === 'personaje' && objetos[o.id]).map(o => infoPersonaje(o.id));
@@ -454,9 +490,9 @@ function tomaAuto(plano, d) {
   const lado = (v) => new THREE.Vector3(v.z, 0, -v.x);
   const P = id ? infoPersonaje(id) : null;
   if ((tipo === 'primer' || tipo === 'medio') && P) {
-    const alto = tipo === 'primer' ? 0.95 : 1.5;
+    const alto = tipo === 'primer' ? (toons.length ? 1.2 : 0.95) : (toons.length ? 1.6 : 1.5);
     const d0 = distPara(alto, alto * 0.62) + 0.15;
-    mira = tipo === 'primer' ? P.cab.clone().add(new THREE.Vector3(0, -0.2, 0)) : P.pecho.clone().add(new THREE.Vector3(0, -0.05, 0));
+    mira = tipo === 'primer' ? P.cab.clone().add(new THREE.Vector3(0, toons.length ? -0.17 : -0.2, 0)) : P.pecho.clone().add(new THREE.Vector3(0, -0.05, 0));
     pos = mira.clone().add(P.frente.clone().multiplyScalar(d0)).add(lado(P.frente).multiplyScalar(d0 * 0.28));
     pos.y = mira.y + 0.05;
   } else if (tipo === 'hombro' && P && id2 && infoPersonaje(id2)) {
@@ -465,7 +501,8 @@ function tomaAuto(plano, d) {
     pos = P.cab.clone().sub(hacia.clone().multiplyScalar(0.55)).add(lado(hacia).multiplyScalar(0.32)); pos.y = P.cab.y + 0.05;
     mira = B.cab.clone().add(new THREE.Vector3(0, -0.15, 0));
   } else if (tipo === 'pov' && P) {
-    pos = P.cab.clone().add(P.frente.clone().multiplyScalar(0.18)); pos.y -= 0.08;
+    if (toons.length) def._sinCuerpo = id;
+    pos = P.cab.clone().add(P.frente.clone().multiplyScalar(toons.length ? -0.35 : 0.18)); pos.y -= 0.08;
     const otro = id2 && infoPersonaje(id2);
     mira = otro ? otro.cab.clone().add(new THREE.Vector3(0, -0.2, 0)) : pos.clone().add(P.frente.clone().multiplyScalar(3)).add(new THREE.Vector3(0, -0.25, 0));
   } else if (tipo === 'nuca' && P) {
@@ -479,7 +516,7 @@ function tomaAuto(plano, d) {
     // general / dos / cenital: encuadra a todos los personajes (o todo lo que hay) desde el frente
     const c = new THREE.Box3();
     const grupo = tipo === 'dos' || personajes.length ? personajes : [];
-    if (grupo.length) for (const q of grupo) c.expandByObject(q.g);
+    if (grupo.length) for (const q of grupo) q.g.userData.toon ? c.union(cajaToon(q.g)) : c.expandByObject(q.g);
     else for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma)) c.expandByObject(objetos[o.id]);
     if (c.isEmpty()) c.setFromCenterAndSize(new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 2, 2));
     const centro = c.getCenter(new THREE.Vector3()), t = c.getSize(new THREE.Vector3());
@@ -500,7 +537,11 @@ function tomaAuto(plano, d) {
     pos = centro.clone().add(frente.multiplyScalar(d0));
     pos.y = tipo === 'cenital' ? mira.y + d0 * 0.9 : mira.y + 0.35 + (tipo === 'general' ? 0.4 : 0);
   }
-  // dentro del cuarto si hay uno, y nunca dentro de un personaje
+  // nunca dentro de un personaje y siempre dentro del cuarto (lo segundo manda)
+  if (tipo !== 'pov') for (const q of personajes) {
+    const caja = (q.g.userData.toon ? cajaToon(q.g) : new THREE.Box3().setFromObject(q.g)).expandByScalar(0.25);
+    if (caja.containsPoint(pos)) pos.add(pos.clone().sub(mira).setY(0).normalize().multiplyScalar(0.6));
+  }
   const cuarto = (d.objetos || []).find(o => o.forma === 'cuarto' && objetos[o.id]);
   if (cuarto) {
     const [w, h, fondo] = cuarto.tam || [4, 2.6, 4]; const c0 = new THREE.Vector3(...(cuarto.pos || [0, 0, 0]));
@@ -508,17 +549,42 @@ function tomaAuto(plano, d) {
     pos.z = THREE.MathUtils.clamp(pos.z, c0.z - fondo / 2 + 0.3, c0.z + fondo / 2 + 2.5);
     pos.y = THREE.MathUtils.clamp(pos.y, 0.3, h - 0.15);
   }
-  if (tipo !== 'pov') for (const q of personajes) {
-    const caja = new THREE.Box3().setFromObject(q.g).expandByScalar(0.25);
-    if (caja.containsPoint(pos)) pos.add(pos.clone().sub(mira).setY(0).normalize().multiplyScalar(0.6));
+  if (toons.length && P && tipo !== 'pov' && tipo !== 'detalle') {
+    // la cabeza de caricatura es grande: a menos de 1 m la cámara solo ve pelo o un ojo. Se busca otro ángulo dentro del cuarto
+    const minimo = tipo === 'primer' ? 1.15 : tipo === 'hombro' ? 0.7 : 1.0;
+    const plano2 = (q) => Math.hypot(q.x - P.pos.x, q.z - P.pos.z);
+    if (plano2(pos) < minimo) {
+      const dentro = (q) => { if (!cuarto) return true; const [w, , fondo] = cuarto.tam || [4, 2.6, 4]; const c0 = cuarto.pos || [0, 0, 0];
+        return Math.abs(q.x - c0[0]) < w / 2 - 0.3 && q.z > c0[2] - fondo / 2 + 0.3 && q.z < c0[2] + fondo / 2 + 2.5; };
+      const v0 = pos.clone().sub(P.pos).setY(0); if (v0.length() < 0.05) v0.copy(P.frente); v0.normalize();
+      for (const g of [0, 35, -35, 70, -70, 110, -110, 150, -150]) {
+        const v = v0.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(g)).multiplyScalar(minimo + 0.25);
+        const q = P.pos.clone().add(v); q.y = pos.y;
+        if (dentro(q)) { pos = q; break; }
+      }
+    }
   }
   // nada entre la cámara y lo que mira: si un objeto tapa el rayo, la cámara se pone delante de él
   if (tipo !== 'pov') {
-    const ray = new THREE.Raycaster(mira.clone(), pos.clone().sub(mira).normalize(), 0.35, mira.distanceTo(pos));
     const ignorar = new Set();
     for (const o of d.objetos || []) if (['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === id || o.id === id2) objetos[o.id] && objetos[o.id].traverse(n => ignorar.add(n));
-    const choques = ray.intersectObjects(escena.children, true).filter(h => h.object.isMesh && !ignorar.has(h.object) && h.object.visible);
-    if (choques.length) pos = mira.clone().add(pos.clone().sub(mira).normalize().multiplyScalar(Math.max(0.6, choques[0].distance - 0.3)));
+    for (const t of toons) t.raiz.traverse(n => ignorar.add(n));  // las tarjetas son casi todas transparentes
+    const B2 = id2 && infoPersonaje(id2);
+    const sujeto = (tipo === 'nuca' || tipo === 'primer' || tipo === 'medio') && P ? P.cab.clone() : tipo === 'hombro' && B2 ? B2.cab.clone() : mira.clone();
+    const choque = (q) => {
+      const ray = new THREE.Raycaster(sujeto, q.clone().sub(sujeto).normalize(), 0.35, sujeto.distanceTo(q));
+      return ray.intersectObjects(escena.children, true).filter(h => h.object.isMesh && !ignorar.has(h.object) && h.object.visible)[0];
+    };
+    if (choque(pos)) {
+      // primero se intenta ver por encima del estorbo o desde un lado; solo si nada sirve, la cámara se pone delante
+      const techo = cuarto ? (cuarto.tam || [4, 2.6, 4])[1] - 0.2 : 4;
+      const giro = (g) => { const v = pos.clone().sub(sujeto); v.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(g)); return sujeto.clone().add(v); };
+      const intentos = [0.45, 0.8, 1.2].map(dy => pos.clone().setY(Math.min(techo, pos.y + dy)))
+        .concat([30, -30, 55, -55].map(giro));
+      const libre = intentos.find(q => !choque(q));
+      if (libre) pos = libre;
+      else { const h = choque(pos); pos = sujeto.clone().add(pos.clone().sub(sujeto).normalize().multiplyScalar(Math.max(0.9, h.distance - 0.3))); }
+    }
   }
   // movimiento: acercamiento suave y un leve desplazamiento lateral
   const dir = mira.clone().sub(pos); const lat = lado(dir.clone().setY(0).normalize()).multiplyScalar(0.12);
@@ -613,9 +679,30 @@ window.cuadro = (u) => {
     fl.setLength(Math.max(0.01, largo * k), Math.min(0.5, largo * 0.3), Math.min(0.3, largo * 0.18));
   }
   camaraEn(u);
+  if (toons.length) {  // cada personaje voltea a la cámara, elige su ángulo de cara, parpadea y habla
+    const segT = (def._dur || 4) * u;
+    for (const t of toons) {
+      t.raiz.updateMatrixWorld(true);
+      const loc = t.raiz.worldToLocal(camara.position.clone());
+      const d = new THREE.Vector2(loc.x, loc.z); const n = d.length() || 1; d.divideScalar(n);
+      t.giro.rotation.y = Math.atan2(loc.x, loc.z);
+      t.tarjeta.position.z = Math.max(0, Math.min(t.tarjeta.userData.z0, n - 0.9));  // nunca se mete encima de la cámara
+      if (def._sinCuerpo === t.id) t.raiz.visible = false;                            // en su propio pov no se ve a sí mismo
+      const facing = Math.abs(d.x) > 0.3 ? (d.x > 0 ? -1 : 1) : 0;
+      const espaldas = d.y < -0.35;
+      let habla = false;
+      for (const [a, b] of ((def.habla || {})[t.id] || [])) if (u >= a - 0.01 && u <= b + 0.02) habla = true;
+      const cb = base[t.id] && base[t.id].cabeza; const look = cb ? Math.max(-1, Math.min(1, -cb.rotation.y / 0.7)) : 0;
+      let expr;
+      for (const an of def.animar || []) if (an.id === t.id && an.expresion && u >= (an.t0 ?? 0) && u <= (an.t1 ?? 1)) expr = an.expresion;
+      t.actualizar({ u, seg: segT, habla, facing, espaldas, look, expr });
+    }
+  }
   if (compositor && !def.sin_post) { grano.uniforms.tiempo.value = u; compositor.render(); } else if (cine) renderer.render(escena, camara); else efecto.render(escena, camara);
   return renderer.domElement.toDataURL('image/jpeg', 0.9);
 };
+window.__toons = () => toons.map(t => ({ id: t.id, vis: t.raiz.visible, pos: t.raiz.getWorldPosition(new THREE.Vector3()).toArray(), z: t.tarjeta.position.toArray(), map: !!t.tarjeta.material.map }));
+window.__cam = () => def.camara;
 window.listo = true;
 </script>
 </body></html>

@@ -168,7 +168,8 @@ class Corto(Short):
         from .motor import _sin_relampagos
         self.escenas = _sin_relampagos(escenas, minimo=1.4) or [{"tipo": "pantalla", "_t0": 0.0, "camara": [0, 0, 100]}]
         for i, e in enumerate(self.escenas):
-            e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else self.voz.duracion + 0.6
+            e["_t1"] = self.escenas[i + 1]["_t0"] if i + 1 < len(self.escenas) else \
+                self.voz.duracion + (5.4 if self.cierre.get("tipo") == "reflexion" else 0.6)  # la última toma sigue viva bajo la reflexión
         # una toma nunca dura demasiado: si pasa de 6 s se parte en dos con otro ángulo
         partidas = []
         for e in self.escenas:

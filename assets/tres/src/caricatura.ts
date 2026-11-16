@@ -20,10 +20,14 @@ const EXPR: Record<string, Expr> = {
   sonriendo: "tender", feliz: "smile_closed", rie: "laugh", nervioso: "nervous", serio: "stern", tierno: "tender",
 };
 
+const luma = (c: string) => { const k = new THREE.Color(c); return 0.2126 * k.r + 0.7152 * k.g + 0.0722 * k.b; };
 function vestuario(o: O): Outfit {
   const h = hash(o.id || "x");
-  const ropa = o.color_ropa || o.color || ROPA[h % ROPA.length];
-  const pelo = o.color_pelo || PELO[(h >> 3) % PELO.length];
+  let ropa = o.color_ropa || o.color || ROPA[h % ROPA.length];
+  // la ropa negra o casi negra desaparece en las escenas de noche: se aclara hacia un color del muestrario
+  if (luma(ropa) < 0.07) ropa = mix(ROPA[h % ROPA.length], ropa, 0.25);
+  let pelo = o.color_pelo || PELO[(h >> 3) % PELO.length];
+  if (Math.abs(luma(pelo) - luma(ropa)) < 0.04 && luma(ropa) < 0.12) ropa = mix(ropa, "#c9c2d6", 0.35);
   const piel = o.piel || PIELES[(h >> 5) % PIELES.length];
   const f: Outfit = { jacket: ropa, pants: mix(ropa, "#2a2734", 0.65), boots: "#3a2a24", skin: piel,
     hat: o.peinado === "gorra" ? "cap" : o.peinado === "calvo" ? null : "hair", hair: pelo, cap: mix(ropa, "#ffffff", 0.15),
@@ -33,7 +37,14 @@ function vestuario(o: O): Outfit {
   return f;
 }
 
-export type Estado = { u: number; seg: number; habla: boolean; facing: -1 | 0 | 1; espaldas: boolean; look: number; expr?: string };
+export type Estado = { u: number; seg: number; habla: boolean; facing: -1 | 0 | 1; espaldas: boolean; look: number; expr?: string; tramo?: number };
+// la cara cambia en cada frase: variaciones de la misma emoción, y el que escucha reacciona distinto
+const VARIA: Record<string, Expr[]> = {
+  sad: ["sad", "hurt", "sad", "cry"], hurt: ["hurt", "sad", "cry", "hurt"], cry: ["cry", "hurt", "cry", "sad"],
+  tender: ["tender", "smile", "sad", "tender"], neutral: ["neutral", "sad", "smile", "neutral"], nervous: ["nervous", "scared", "nervous", "shock"],
+  scared: ["scared", "shock", "nervous", "scared"], stern: ["stern", "stern", "angry", "stern"],
+};
+const ESCUCHA: Record<string, Expr> = { sad: "hurt", hurt: "sad", cry: "hurt", tender: "sad", neutral: "sad", nervous: "scared", scared: "nervous" };
 
 /** pelo largo o chongo: se pinta detrás de la cabeza antes del cuerpo */
 function peloDetras(p: Pen, o: O, f: Outfit, seed: number, mode: string) {
@@ -49,6 +60,7 @@ function peloDetras(p: Pen, o: O, f: Outfit, seed: number, mode: string) {
 }
 
 export function crearPersonaje(o: O, genero: string) {
+  if (!o.peinado) o.peinado = ["corto", "largo", "chongo", "corto"][hash(o.id || "x") % 4];
   const f = vestuario(o), seed = (hash(o.id || "x") % 97) + 1;
   const pose = o.pose || "de_pie";
   const mode = pose === "sentado" || pose === "cabizbajo" || pose === "acostado" ? "sit" : pose === "caminando" ? "stroll" : "stand";
@@ -109,7 +121,8 @@ export function crearPersonaje(o: O, genero: string) {
 
   function actualizar(e: Estado) {
     const s = e.seg + fase;
-    const expr = (e.expr && EXPR[e.expr]) || base;
+    const tr = e.tramo ?? 0;
+    const expr: Expr = (e.expr && EXPR[e.expr]) || (e.habla ? (VARIA[base] || [base])[tr % 4] : (tr > 0 && ESCUCHA[base]) || base);
     const parpadeo = ((s % (3.3 + (seed % 5) * 0.31)) < 0.13) ? 1 : 0;
     let boca: MouthK | undefined;
     if (e.habla) { const ciclo = Math.floor(s * 8.5) % 4; boca = (["o", "O", "dash", "smile"] as MouthK[])[ciclo]; if (expr === "cry" || expr === "hurt" || expr === "sad") boca = (["o", "wave", "O", "frown"] as MouthK[])[ciclo]; }

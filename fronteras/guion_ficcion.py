@@ -159,6 +159,13 @@ Formas especiales:
 - {{"id": "cuarto", "forma": "cuarto", "tam": [ancho, alto, fondo], "color": "#hex pared", "papel": "flores|rayas|azulejo",
    "piso": "#hex", "techo": true, "puerta": {{"pared": "fondo|izq|der", "x": 0.9, "luz_detras": "#hex opcional"}},
    "ventana": {{"pared": "izq|der|fondo", "x": -0.6}}}}  Tres paredes y el lado +z abierto para la cámara.
+- {{"id": "vagon", "forma": "vagon", "tam": [2.7, 2.3, 9], "color": "#hex paredes", "acento": "#hex bancas (metro CDMX naranja #E07A2E)"}}
+  Vagón de metro o tren por dentro, a lo largo de z, con bancas a los lados (x = ±1.1, asiento a 0.44 m), tubos, lámparas y el
+  túnel pasando por las ventanas. Para sentar a alguien en la banca: personaje sentado en x ±1.0 mirando al centro (rot ±90),
+  con "asiento": 0.44; sin silla aparte.
+EL SET ES EL LUGAR DEL GUION: si la historia pasa en el metro usa "vagon"; en un cuarto, "cuarto" con muebles; en la calle,
+banquetas, postes y fachadas. Nunca un vacío oscuro con dos sillas. Ropa de colores medios (nunca negra) y que los dos
+personajes se distingan a primera vista (peinado, color de ropa, piel).
   La hoja de la puerta se anima con el id "<id del cuarto>_puerta" y "girar": [0, 70, 0].
 - {{"id": "luces", "forma": "serie_luces", "puntos": [[-3,2.6,-3],[3,2.6,-3.5]], "colores": ["#FFD9A0","#FF8FB8","#9FD8FF"]}}
 - {{"id": "foco1", "forma": "foco", "pos": [x,y,z], "color": "#FFB870", "intensidad": 2.5, "sombra": true}}  luz práctica.

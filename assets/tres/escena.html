@@ -280,6 +280,40 @@ function cuarto(o) {
   return g;
 }
 
+// vagón del metro por dentro: bancas a los lados, tubos, ventanas con luces del túnel que pasan, lámparas en el techo
+const tuneles = [];
+function vagon(o) {
+  const g = new THREE.Group(); const [w, h, l] = o.tam || [2.7, 2.3, 9];
+  const col = new THREE.Color(o.color || '#C9C4B8'), acento = new THREE.Color(o.acento || '#E07A2E');
+  const mat = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const plano = (mw, mh, m, x, y, z, rx, ry) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), m); p.position.set(x, y, z); p.rotation.set(rx, ry, 0); p.receiveShadow = true; g.add(p); return p; };
+  const pared = mat(col); pared.side = THREE.DoubleSide;
+  plano(w, l, mat(o.piso || '#3B3A40', 0.9), 0, 0.003, 0, -Math.PI / 2, 0);
+  plano(w, l, mat('#E9E6DE', 0.9), 0, h, 0, Math.PI / 2, 0);
+  for (const s of [-1, 1]) {
+    plano(l, 0.85, pared, s * w / 2, 0.42, 0, 0, -s * Math.PI / 2);
+    plano(l, 0.45, pared, s * w / 2, h - 0.22, 0, 0, -s * Math.PI / 2);
+    // ventana: el túnel oscuro con luces que pasan
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 64; const x = cv.getContext('2d');
+    x.fillStyle = '#07080c'; x.fillRect(0, 0, 512, 64);
+    for (let i = 0; i < 6; i++) { const gr = x.createLinearGradient(i * 85, 0, i * 85 + 40, 0); gr.addColorStop(0, 'rgba(255,214,150,0)'); gr.addColorStop(0.5, 'rgba(255,214,150,0.9)'); gr.addColorStop(1, 'rgba(255,214,150,0)'); x.fillStyle = gr; x.fillRect(i * 85, 26, 40, 8); }
+    const tx = new THREE.CanvasTexture(cv); tx.wrapS = THREE.RepeatWrapping; tx.repeat.set(3, 1); tx.colorSpace = THREE.SRGBColorSpace;
+    plano(l, h - 1.3, new THREE.MeshBasicMaterial({ map: tx, side: THREE.DoubleSide }), s * (w / 2 - 0.005), 0.85 + (h - 1.3) / 2, 0, 0, -s * Math.PI / 2);
+    tuneles.push({ tx, v: o.velocidad ?? 2.5 });
+    // banca corrida y franja de color
+    g.add(pieza(new THREE.BoxGeometry(0.45, 0.08, l * 0.9), mat(acento, 0.6), s * (w / 2 - 0.25), 0.44, 0));
+    g.add(pieza(new THREE.BoxGeometry(0.06, 0.45, l * 0.9), mat(acento, 0.6), s * (w / 2 - 0.03), 0.68, 0));
+    g.add(pieza(new THREE.BoxGeometry(0.02, 0.06, l), mat(acento, 0.5), s * (w / 2 - 0.01), h - 0.5, 0));
+    // tubos
+    for (let z = -l / 2 + 1; z < l / 2; z += 2.2) g.add(pieza(new THREE.CylinderGeometry(0.02, 0.02, h, 10), new THREE.MeshStandardMaterial({ color: '#C8CCD2', metalness: 0.6, roughness: 0.35 }), s * 0.55, h / 2, z));
+  }
+  // lámparas del techo (tiras de luz) y una luz suave que llena el vagón
+  for (let z = -l / 2 + 0.8; z < l / 2; z += 1.6) g.add(pieza(new THREE.BoxGeometry(0.18, 0.02, 1.1), new THREE.MeshBasicMaterial({ color: new THREE.Color('#FFF4E0').multiplyScalar(1.15) }), 0, h - 0.015, z));
+  const luz = new THREE.PointLight(new THREE.Color('#FFF1DA'), 1.1, 9, 1.6); luz.position.set(0, h - 0.3, 0); g.add(luz);
+  const luz2 = new THREE.PointLight(new THREE.Color('#FFF1DA'), 0.7, 7, 1.6); luz2.position.set(0, h - 0.3, -l / 3); g.add(luz2);
+  return g;
+}
+
 // serie de focos colgando (fiesta de noche) o un foco suelto
 function serieLuces(o) {
   const g = new THREE.Group(); const pts = (o.puntos || [[-3, 2.6, -2], [3, 2.6, -2]]).map(v => new THREE.Vector3(...v));
@@ -334,8 +368,8 @@ window.preparar = async (d, ancho, alto) => {
   efecto = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.07, 0.07, 0.07] });
   escena = new THREE.Scene();
   const amb = AMBIENTES[d.ambiente] || null;
-  const TONO = { noche: [[0.8, 0.82, 1.0], 0.96, 0.8], terror: [[0.62, 0.62, 0.78], 0.82, 0.7], interior: [[1.0, 0.93, 0.84], 1.0, 0.85] };
-  const tn = TONO[d.ambiente] || (cine ? [[1.0, 0.9, 0.8], 1.0, 0.86] : [[1, 1, 1], 1.03, 0.9]);
+  const TONO = { noche: [[0.84, 0.86, 1.0], 0.8, 0.8], terror: [[0.62, 0.62, 0.78], 0.74, 0.7], interior: [[1.0, 0.95, 0.9], 0.86, 0.85] };
+  const tn = TONO[d.ambiente] || (cine ? [[1.0, 0.94, 0.88], 0.86, 0.86] : [[1, 1, 1], 1.0, 0.9]);
   tonoTarjetas(tn[0], tn[1] * (d.brillo_personajes || 1), tn[2]);
   escena.background = new THREE.Color(amb ? (d.fondo_cine || amb.fondo) : cine ? (d.fondo_cine || '#17110C') : (d.fondo || '#BFE6F7'));
   camara = new THREE.PerspectiveCamera(d.lente || (AMBIENTES[d.ambiente] ? 42 : cine ? 32 : 38), ancho / alto, 0.05, 400);
@@ -387,7 +421,7 @@ window.preparar = async (d, ancho, alto) => {
         continue;
       } catch (err) { console.log('modelo no cargó', o.archivo, err); }
     }
-    const especial = { personaje, cuarto, serie_luces: serieLuces, foco, bokeh: bokehFondo }[o.forma];
+    const especial = { personaje, cuarto, serie_luces: serieLuces, foco, bokeh: bokehFondo, vagon }[o.forma];
     if (especial) {
       const g = especial(o);
       g.position.set(...(o.pos || [0, 0, 0]));
@@ -409,7 +443,7 @@ window.preparar = async (d, ancho, alto) => {
   }
   // la sombra se ajusta al tamaño de lo que hay en escena, para que salga nítida
   const caja = new THREE.Box3();
-  for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'bokeh', 'serie_luces'].includes(o.forma)) caja.expandByObject(objetos[o.id]);
+  for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'vagon', 'bokeh', 'serie_luces'].includes(o.forma)) caja.expandByObject(objetos[o.id]);
   if (caja.isEmpty()) for (const id in objetos) caja.expandByObject(objetos[id]);
   if (!caja.isEmpty()) {
     const centro = caja.getCenter(new THREE.Vector3()), radio = Math.max(1, caja.getSize(new THREE.Vector3()).length() * 0.7);
@@ -423,7 +457,7 @@ window.preparar = async (d, ancho, alto) => {
   for (const L of luces) if (L.tipo === 'foco') {
     const lp = L.luz.getWorldPosition(new THREE.Vector3()); let dmin = 9;
     for (const o of d.objetos || []) {
-      if (!objetos[o.id] || ['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === L.id) continue;
+      if (!objetos[o.id] || ['cuarto', 'vagon', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === L.id) continue;
       const caja = objetos[o.id].userData.toon ? cajaToon(objetos[o.id]) : new THREE.Box3().setFromObject(objetos[o.id]);
       if (!caja.isEmpty()) dmin = Math.min(dmin, caja.distanceToPoint(lp));
     }
@@ -498,7 +532,7 @@ function tomaAuto(plano, d) {
   } else if (tipo === 'hombro' && P && id2 && infoPersonaje(id2)) {
     const B = infoPersonaje(id2);
     const hacia = B.cab.clone().sub(P.cab).setY(0).normalize();
-    pos = P.cab.clone().sub(hacia.clone().multiplyScalar(0.55)).add(lado(hacia).multiplyScalar(0.32)); pos.y = P.cab.y + 0.05;
+    pos = P.cab.clone().sub(hacia.clone().multiplyScalar(toons.length ? 1.05 : 0.55)).add(lado(hacia).multiplyScalar(toons.length ? 0.62 : 0.32)); pos.y = P.cab.y + (toons.length ? 0.12 : 0.05);
     mira = B.cab.clone().add(new THREE.Vector3(0, -0.15, 0));
   } else if (tipo === 'pov' && P) {
     if (toons.length) def._sinCuerpo = id;
@@ -517,7 +551,7 @@ function tomaAuto(plano, d) {
     const c = new THREE.Box3();
     const grupo = tipo === 'dos' || personajes.length ? personajes : [];
     if (grupo.length) for (const q of grupo) q.g.userData.toon ? c.union(cajaToon(q.g)) : c.expandByObject(q.g);
-    else for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma)) c.expandByObject(objetos[o.id]);
+    else for (const o of d.objetos || []) if (objetos[o.id] && !['cuarto', 'vagon', 'bokeh', 'serie_luces', 'foco'].includes(o.forma)) c.expandByObject(objetos[o.id]);
     if (c.isEmpty()) c.setFromCenterAndSize(new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 2, 2));
     const centro = c.getCenter(new THREE.Vector3()), t = c.getSize(new THREE.Vector3());
     let frente = new THREE.Vector3(0, 0, 1);
@@ -542,19 +576,29 @@ function tomaAuto(plano, d) {
     const caja = (q.g.userData.toon ? cajaToon(q.g) : new THREE.Box3().setFromObject(q.g)).expandByScalar(0.25);
     if (caja.containsPoint(pos)) pos.add(pos.clone().sub(mira).setY(0).normalize().multiplyScalar(0.6));
   }
-  const cuarto = (d.objetos || []).find(o => o.forma === 'cuarto' && objetos[o.id]);
+  const cuarto = (d.objetos || []).find(o => (o.forma === 'cuarto' || o.forma === 'vagon') && objetos[o.id]);
   if (cuarto) {
-    const [w, h, fondo] = cuarto.tam || [4, 2.6, 4]; const c0 = new THREE.Vector3(...(cuarto.pos || [0, 0, 0]));
+    const [w, h, fondo] = (cuarto.tam || (cuarto.forma === 'vagon' ? [2.7, 2.3, 9] : [4, 2.6, 4])); const c0 = new THREE.Vector3(...(cuarto.pos || [0, 0, 0]));
+    const x0 = pos.x;
     pos.x = THREE.MathUtils.clamp(pos.x, c0.x - w / 2 + 0.3, c0.x + w / 2 - 0.3);
     pos.z = THREE.MathUtils.clamp(pos.z, c0.z - fondo / 2 + 0.3, c0.z + fondo / 2 + 2.5);
     pos.y = THREE.MathUtils.clamp(pos.y, 0.3, h - 0.15);
+    // tomas de grupo en un lugar angosto (vagón, pasillo): si la pared empujó la cámara, se mira a lo largo del lugar
+    if ((tipo === 'dos' || tipo === 'general') && Math.abs(pos.x - x0) > 0.3 && personajes.length) {
+      const c = new THREE.Box3(); for (const q of personajes) q.g.userData.toon ? c.union(cajaToon(q.g)) : c.expandByObject(q.g);
+      const t = c.getSize(new THREE.Vector3()), centro = c.getCenter(new THREE.Vector3());
+      const dz = distPara(t.y * 1.25, (t.x + 0.2) * 1.05) + t.z / 2;
+      const lejos = 1;
+      pos = new THREE.Vector3(c0.x + (centro.x - c0.x) * 0.3, Math.min(h - 0.25, centro.y + 0.45), THREE.MathUtils.clamp(centro.z + lejos * dz, c0.z - fondo / 2 + 0.3, c0.z + fondo / 2 + 2.5));
+      mira = centro.clone(); mira.y = Math.max(0.6, centro.y);
+    }
   }
   if (toons.length && P && tipo !== 'pov' && tipo !== 'detalle') {
     // la cabeza de caricatura es grande: a menos de 1 m la cámara solo ve pelo o un ojo. Se busca otro ángulo dentro del cuarto
     const minimo = tipo === 'primer' ? 1.15 : tipo === 'hombro' ? 0.7 : 1.0;
     const plano2 = (q) => Math.hypot(q.x - P.pos.x, q.z - P.pos.z);
     if (plano2(pos) < minimo) {
-      const dentro = (q) => { if (!cuarto) return true; const [w, , fondo] = cuarto.tam || [4, 2.6, 4]; const c0 = cuarto.pos || [0, 0, 0];
+      const dentro = (q) => { if (!cuarto) return true; const [w, , fondo] = (cuarto.tam || (cuarto.forma === 'vagon' ? [2.7, 2.3, 9] : [4, 2.6, 4])); const c0 = cuarto.pos || [0, 0, 0];
         return Math.abs(q.x - c0[0]) < w / 2 - 0.3 && q.z > c0[2] - fondo / 2 + 0.3 && q.z < c0[2] + fondo / 2 + 2.5; };
       const v0 = pos.clone().sub(P.pos).setY(0); if (v0.length() < 0.05) v0.copy(P.frente); v0.normalize();
       for (const g of [0, 35, -35, 70, -70, 110, -110, 150, -150]) {
@@ -567,7 +611,7 @@ function tomaAuto(plano, d) {
   // nada entre la cámara y lo que mira: si un objeto tapa el rayo, la cámara se pone delante de él
   if (tipo !== 'pov') {
     const ignorar = new Set();
-    for (const o of d.objetos || []) if (['cuarto', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === id || o.id === id2) objetos[o.id] && objetos[o.id].traverse(n => ignorar.add(n));
+    for (const o of d.objetos || []) if (['cuarto', 'vagon', 'bokeh', 'serie_luces', 'foco'].includes(o.forma) || o.id === id || o.id === id2) objetos[o.id] && objetos[o.id].traverse(n => ignorar.add(n));
     for (const t of toons) t.raiz.traverse(n => ignorar.add(n));  // las tarjetas son casi todas transparentes
     const B2 = id2 && infoPersonaje(id2);
     const sujeto = (tipo === 'nuca' || tipo === 'primer' || tipo === 'medio') && P ? P.cab.clone() : tipo === 'hombro' && B2 ? B2.cab.clone() : mira.clone();
@@ -577,7 +621,7 @@ function tomaAuto(plano, d) {
     };
     if (choque(pos)) {
       // primero se intenta ver por encima del estorbo o desde un lado; solo si nada sirve, la cámara se pone delante
-      const techo = cuarto ? (cuarto.tam || [4, 2.6, 4])[1] - 0.2 : 4;
+      const techo = cuarto ? ((cuarto.tam || (cuarto.forma === 'vagon' ? [2.7, 2.3, 9] : [4, 2.6, 4])))[1] - 0.2 : 4;
       const giro = (g) => { const v = pos.clone().sub(sujeto); v.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(g)); return sujeto.clone().add(v); };
       const intentos = [0.45, 0.8, 1.2].map(dy => pos.clone().setY(Math.min(techo, pos.y + dy)))
         .concat([30, -30, 55, -55].map(giro));
@@ -678,6 +722,7 @@ window.cuadro = (u) => {
     const t0 = f.t0 ?? 0.2; const k = suave((u - t0) / 0.15); fl.visible = k > 0.01;
     fl.setLength(Math.max(0.01, largo * k), Math.min(0.5, largo * 0.3), Math.min(0.3, largo * 0.18));
   }
+  for (const T of tuneles) T.tx.offset.x = -u * (def._dur || 4) * T.v * 0.25;  // el túnel pasa por la ventana
   camaraEn(u);
   if (toons.length) {  // cada personaje voltea a la cámara, elige su ángulo de cara, parpadea y habla
     const segT = (def._dur || 4) * u;
@@ -690,12 +735,13 @@ window.cuadro = (u) => {
       if (def._sinCuerpo === t.id) t.raiz.visible = false;                            // en su propio pov no se ve a sí mismo
       const facing = Math.abs(d.x) > 0.3 ? (d.x > 0 ? -1 : 1) : 0;
       const espaldas = d.y < -0.35;
-      let habla = false;
+      let habla = false, tramo = 0;
       for (const [a, b] of ((def.habla || {})[t.id] || [])) if (u >= a - 0.01 && u <= b + 0.02) habla = true;
+      for (const id2 in (def.habla || {})) for (const [a] of def.habla[id2]) if (u >= a) tramo++;  // cuántas frases van: la cara cambia
       const cb = base[t.id] && base[t.id].cabeza; const look = cb ? Math.max(-1, Math.min(1, -cb.rotation.y / 0.7)) : 0;
       let expr;
       for (const an of def.animar || []) if (an.id === t.id && an.expresion && u >= (an.t0 ?? 0) && u <= (an.t1 ?? 1)) expr = an.expresion;
-      t.actualizar({ u, seg: segT, habla, facing, espaldas, look, expr });
+      t.actualizar({ u, seg: segT, habla, facing, espaldas, look, expr, tramo: tramo + (def._tramo0 || 0) });
     }
   }
   if (compositor && !def.sin_post) { grano.uniforms.tiempo.value = u; compositor.render(); } else if (cine) renderer.render(escena, camara); else efecto.render(escena, camara);

@@ -1,0 +1,5 @@
+{"genero": "amor", "sets": {"metro": {"ambiente": "interior", "objetos": [
+ {"id": "vagon", "forma": "vagon", "tam": [2.7, 2.3, 9]},
+ {"id": "leo", "forma": "personaje", "pose": "sentado", "color_ropa": "#111111", "color_pelo": "#111111", "peinado": "corto", "asiento": 0.44, "pos": [-1.0, 0, 0.3], "rot": [0, 90, 0], "luz": "#4D8BFF"},
+ {"id": "mar", "forma": "personaje", "pose": "sentado", "color_ropa": "#9AA3C7", "peinado": "largo", "asiento": 0.44, "pos": [1.0, 0, -0.6], "rot": [0, -90, 0], "luz": "#FF9A4D"}
+]}}, "escenas": [{"set": "metro", "plano": "dos"}]}

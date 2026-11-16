@@ -232,8 +232,8 @@ type EyeK = "dot" | "small" | "lid" | "slit" | "happy" | "dash" | "squeeze" | "s
 type MouthK = "dash" | "frown" | "smirk" | "smile" | "smileWide" | "grin" | "laugh" | "o" | "O" | "wave" | "teeth" | "lick";
 /** eyes [back, front], brows [inner, outer] offsets in u (+ = down), mouth kind */
 const FACE: Record<Expr, { eye: [EyeK, EyeK]; brow: [number, number]; mouth: MouthK }> = {
-  neutral: { eye: ["lid", "lid"], brow: [0, -1], mouth: "dash" },
-  stern: { eye: ["lid", "lid"], brow: [3, -2], mouth: "frown" },
+  neutral: { eye: ["dot", "dot"], brow: [0, -1], mouth: "dash" },
+  stern: { eye: ["lid", "lid"], brow: [4, -2], mouth: "frown" },
   grin: { eye: ["happy", "happy"], brow: [-3, -3], mouth: "grin" },
   laugh: { eye: ["squeeze", "squeeze"], brow: [-4, -4], mouth: "laugh" },
   whistle: { eye: ["dash", "dash"], brow: [-2, -4], mouth: "o" },
@@ -247,11 +247,11 @@ const FACE: Record<Expr, { eye: [EyeK, EyeK]; brow: [number, number]; mouth: Mou
   smile_closed: { eye: ["happy", "happy"], brow: [0, -1], mouth: "smile" },
   lick: { eye: ["dot", "dot"], brow: [0, -1], mouth: "lick" },
   // STORY: caras para cortos de amor y terror
-  sad: { eye: ["lid", "lid"], brow: [-5, 4], mouth: "frown" },
-  hurt: { eye: ["slit", "slit"], brow: [-6, 5], mouth: "dash" },
+  sad: { eye: ["dot", "dot"], brow: [-6, 5], mouth: "frown" },
+  hurt: { eye: ["small", "small"], brow: [-7, 6], mouth: "wave" },
   cry: { eye: ["squeeze", "squeeze"], brow: [-6, 5], mouth: "wave" },
   scared: { eye: ["shock", "shock"], brow: [-6, 2], mouth: "wave" },
-  angry: { eye: ["lid", "lid"], brow: [5, -3], mouth: "frown" },
+  angry: { eye: ["dot", "dot"], brow: [6, -3], mouth: "frown" },
   tender: { eye: ["happy", "happy"], brow: [-3, 2], mouth: "smile" },
 };
 const halfLid = (k: EyeK): EyeK => (k === "dot" || k === "small" ? "lid" : k === "lid" ? "slit" : k === "shock" ? "shockHalf" : k);
